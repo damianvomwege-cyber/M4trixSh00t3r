@@ -2956,10 +2956,16 @@ function initPeer(id = null) {
     
     peer.on("error", (err) => {
       console.error("❌ Peer error:", err.type, err.message);
+      
+      // Handle peer-unavailable error (target not found)
+      if (err.type === "peer-unavailable") {
+        console.log("Target peer not found!");
+        showJoinError("Lobby nicht gefunden! Code falsch oder Host offline.");
+        return; // Don't reject, just show error
+      }
+      
       if (err.type === "unavailable-id") {
         reject(new Error("Code bereits in Benutzung"));
-      } else if (err.type === "peer-unavailable") {
-        reject(new Error("Lobby nicht gefunden"));
       } else if (err.type === "network") {
         reject(new Error("Netzwerk-Fehler"));
       } else if (err.type === "server-error") {
@@ -2971,6 +2977,11 @@ function initPeer(id = null) {
     
     peer.on("disconnected", () => {
       console.log("⚠️ Peer disconnected from signaling server");
+      // Try to reconnect
+      if (peer && !peer.destroyed) {
+        console.log("Attempting to reconnect...");
+        peer.reconnect();
+      }
     });
     
     peer.on("connection", (conn) => {
@@ -3168,18 +3179,26 @@ function hideConnectionStatus() {
 function openLobby() {
   menu.classList.add("hidden");
   lobbyPanel.classList.remove("hidden");
-  lobbyStatus.textContent = "Connecting to network...";
+  lobbyStatus.textContent = "Verbinde zum Netzwerk...";
   lobbyMenu.classList.add("hidden");
   lobbyHost.classList.add("hidden");
   lobbyJoinForm.classList.add("hidden");
   lobbyWaiting.classList.add("hidden");
   
+  // Cleanup any existing peer
+  if (peer) {
+    peer.destroy();
+    peer = null;
+  }
+  
   // Initialize PeerJS
-  initPeer().then(() => {
+  initPeer().then((peerId) => {
+    console.log("Guest peer ready:", peerId);
     lobbyStatus.classList.add("hidden");
     lobbyMenu.classList.remove("hidden");
   }).catch(err => {
-    lobbyStatus.textContent = "❌ Connection failed: " + err.message;
+    console.error("Failed to init peer:", err);
+    lobbyStatus.textContent = "❌ Verbindung fehlgeschlagen: " + err.message;
   });
 }
 
@@ -3285,17 +3304,32 @@ function joinLobby() {
 }
 
 function attemptConnection(hostId) {
+  // Wait for our peer to be fully ready
+  if (!peer || !peer.open) {
+    console.log("Waiting for peer to be ready...");
+    setTimeout(() => attemptConnection(hostId), 500);
+    return;
+  }
+  
   try {
     console.log("Connecting to peer:", hostId);
-    const conn = peer.connect(hostId, { reliable: true });
+    console.log("Our peer ID:", peer.id);
+    console.log("Our peer open:", peer.open);
+    
+    const conn = peer.connect(hostId, { 
+      reliable: true,
+      serialization: "json"
+    });
     
     if (!conn) {
       showJoinError("Verbindung fehlgeschlagen!");
       return;
     }
     
+    console.log("Connection object created, waiting for open...");
+    
     conn.on("open", () => {
-      console.log("Connection opened to host!");
+      console.log("✅ Connection opened to host!");
       peerConnection = conn;
       netState.connected = true;
       
@@ -3314,17 +3348,19 @@ function attemptConnection(hostId) {
     });
     
     conn.on("error", (err) => {
-      console.error("Connection error:", err);
-      showJoinError("Verbindungsfehler: " + err.type);
+      console.error("❌ Connection error:", err);
+      showJoinError("Verbindungsfehler: " + (err.type || err.message));
     });
     
     // Timeout for connection
     setTimeout(() => {
       if (!netState.connected) {
-        console.log("Connection timeout");
-        showJoinError("Lobby nicht gefunden oder offline!");
+        console.log("Connection timeout - checking peer status");
+        console.log("Peer open:", peer?.open);
+        console.log("Peer disconnected:", peer?.disconnected);
+        showJoinError("Timeout! Host evtl. offline. Versuche es nochmal.");
       }
-    }, 8000);
+    }, 10000);
     
   } catch (err) {
     console.error("Failed to connect:", err);
