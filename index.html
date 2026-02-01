@@ -67,10 +67,40 @@
           <button id="multiplayer-btn" class="btn btn-large">👥 LOCAL MULTIPLAYER</button>
           <button id="online-btn" class="btn btn-large">🌐 ONLINE LOBBY</button>
           <button id="story-btn" class="btn">📖 STORY MODE</button>
+          <button id="chat-btn" class="btn">🤖 MATRIX AI CHAT</button>
           <button id="achievements-btn" class="btn">🏆 ACHIEVEMENTS</button>
           <button id="highscore-btn" class="btn">📊 HIGHSCORES</button>
           <button id="admin-btn" class="btn">⚙ ADMIN PANEL</button>
         </div>
+      </div>
+    </div>
+
+    <!-- Matrix AI Chat -->
+    <div id="chat" class="overlay hidden">
+      <div class="panel chat-panel">
+        <div class="panel-title">🤖 MATRIX AI - ORACLE</div>
+        <div class="chat-subtitle">Die KI, die alles weiß... oder so tut.</div>
+        <div id="chat-messages" class="chat-messages">
+          <div class="chat-message ai">
+            <div class="chat-avatar">🤖</div>
+            <div class="chat-bubble">
+              Willkommen im System, Neo. Ich bin die Oracle - eine KI aus der Matrix. 
+              Stelle mir Fragen über das Spiel, das Leben, oder das Universum. 
+              Ich werde versuchen, dir zu helfen... wenn die Matrix es erlaubt.
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-container">
+          <input type="text" id="chat-input" class="chat-input" placeholder="Schreibe eine Nachricht..." autocomplete="off" />
+          <button id="chat-send" class="btn chat-send">▶</button>
+        </div>
+        <div class="chat-suggestions">
+          <button class="chat-suggestion" data-msg="Wie spielt man das Spiel?">Spielanleitung</button>
+          <button class="chat-suggestion" data-msg="Welche Powerups gibt es?">Powerups</button>
+          <button class="chat-suggestion" data-msg="Wie besiege ich den Boss?">Boss Tipps</button>
+          <button class="chat-suggestion" data-msg="Erzähl mir etwas über die Matrix">Matrix Lore</button>
+        </div>
+        <button id="chat-close" class="btn">◀ ZURÜCK</button>
       </div>
     </div>
 

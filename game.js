@@ -29,6 +29,12 @@ const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start-btn");
 const multiplayerBtn = document.getElementById("multiplayer-btn");
 const storyBtn = document.getElementById("story-btn");
+const chatBtn = document.getElementById("chat-btn");
+const chatOverlay = document.getElementById("chat");
+const chatMessages = document.getElementById("chat-messages");
+const chatInput = document.getElementById("chat-input");
+const chatSend = document.getElementById("chat-send");
+const chatClose = document.getElementById("chat-close");
 const p2StatsEl = document.getElementById("p2-stats");
 const p2LivesEl = document.getElementById("p2-lives");
 const achievementsBtn = document.getElementById("achievements-btn");
@@ -3922,6 +3928,375 @@ function updateOnlineRemotePlayer(delta) {
     // Note: Guest sees host as the "main" green player
   }
 }
+
+// ============================================================================
+// MATRIX AI CHAT SYSTEM
+// ============================================================================
+const matrixAI = {
+  name: "Oracle",
+  personality: "mystisch, weise, manchmal kryptisch, mit Humor",
+  
+  // Wissensbasis über das Spiel
+  knowledge: {
+    controls: {
+      p1: "WASD zum Bewegen, Leertaste zum Schießen",
+      p2: "Pfeiltasten zum Bewegen, Enter zum Schießen",
+      weapons: "1-4 für Waffenwechsel, Q für die Nuke",
+      other: "P = Pause, B = Shop, I = AI Helper, M = Menü"
+    },
+    powerups: {
+      rapid: "Rapid Fire - Schnelleres Schießen, stackbar bis Level 20",
+      shield: "Shield - Macht dich unverwundbar für 60 Sekunden",
+      life: "Extra Life - Ein zusätzliches Leben",
+      speed: "Speed Boost - Schnellere Bewegung",
+      spread: "Spread Shot - Schießt 3 Kugeln gleichzeitig"
+    },
+    weapons: {
+      blaster: "Blaster - Deine Standardwaffe, zuverlässig",
+      laser: "Laser - Durchdringt alle Feinde in einer Linie",
+      rocket: "Rakete - Langsam aber mächtig, mit Explosion",
+      homing: "Homing Missile - Verfolgt automatisch Feinde"
+    },
+    bosses: "Bosse erscheinen alle 5 Level. Sie haben mehrere Phasen und spezielle Angriffe. Tipp: Bewege dich viel und nutze die Nuke!",
+    nuke: "Die Nuke (Q-Taste) tötet alle sichtbaren Feinde sofort. Cooldown: 3 Minuten. Nutze sie weise!",
+    ai: "Der AI Helper wird auf Level 2 freigeschaltet. Drücke I um ihn zu aktivieren. Er hilft dir beim Kämpfen!",
+    shop: "Im Shop (B-Taste) kannst du permanente Upgrades kaufen. Credits bekommst du durch das Töten von Feinden.",
+    multiplayer: "Local Multiplayer: 2 Spieler an einem Keyboard. Online: Erstelle eine Lobby und teile den Code!"
+  },
+  
+  // Matrix-Zitate und Weisheiten
+  matrixQuotes: [
+    "Es gibt keinen Löffel.",
+    "Was ist real? Wie definierst du 'real'?",
+    "Ich kann dir nur die Tür zeigen. Durchgehen musst du selbst.",
+    "Die Matrix ist überall. Sie ist um uns herum.",
+    "Unwissenheit ist ein Segen... manchmal.",
+    "Der Eine ist nicht der Stärkste. Der Eine ist der, der glaubt.",
+    "Alles was einen Anfang hat, hat auch ein Ende.",
+    "Du musst deine Angst loslassen, Neo.",
+    "Morpheus glaubt an dich. Die Frage ist: Glaubst du an dich?",
+    "Die rote Pille zeigt dir die Wahrheit. Die blaue... nun, du bist noch hier.",
+    "In der Matrix gibt es keine Grenzen, nur die, die du dir selbst setzt.",
+    "Fate, it seems, is not without a sense of irony."
+  ],
+  
+  // Witze und Easter Eggs
+  jokes: [
+    "Warum programmieren Agents nie in JavaScript? Weil sie kein 'undefined' akzeptieren können! 🤖",
+    "Ich habe versucht, die Matrix zu debuggen. Der Bug war der User... wie immer. 😏",
+    "404 - Humor nicht gefunden. Moment, doch: Du spielst noch? Respekt! 🎮",
+    "Ein Pixel hat mich gefragt, ob ich echt bin. Ich sagte: 'Definiere echt.' Er stürzte ab.",
+    "Kennst du den Unterschied zwischen einem Bug und einem Feature? Marketing.",
+    "Warum hat Neo die rote Pille genommen? Weil die blaue keinen RGB-Support hatte!"
+  ],
+  
+  // Tipps für verschiedene Situationen
+  tips: [
+    "Tipp: Sammle Rapid Fire Powerups - sie stacken und machen dich zur Schießmaschine!",
+    "Tipp: Der Shield macht dich immun gegen ALLES. Nutze ihn für schwierige Bosse!",
+    "Tipp: Bleib in Bewegung! Stillstand = Tod in der Matrix.",
+    "Tipp: Die Nuke ist dein Notfall-Button. Spar sie für Boss-Phasen auf!",
+    "Tipp: Der AI Helper sammelt auch Powerups für dich. Teamwork!",
+    "Tipp: Homing Missiles sind perfekt gegen schnelle Feinde.",
+    "Tipp: Im Shop sind Damage Upgrades am Anfang am wichtigsten.",
+    "Tipp: Combos erhöhen deinen Score-Multiplikator. Keep killing!",
+    "Tipp: Bosse haben Phasen - sie werden stärker aber auch vorhersehbarer."
+  ],
+  
+  // Antwort-Muster
+  patterns: [
+    { regex: /hallo|hi|hey|guten tag|moin/i, type: "greeting" },
+    { regex: /wie geht|was geht|wie läuft/i, type: "howAreYou" },
+    { regex: /spielen|steuerung|controls|tastatur|bedienung/i, type: "controls" },
+    { regex: /powerup|power-up|power up|boost|buffs/i, type: "powerups" },
+    { regex: /waffe|weapon|schießen|gun|blaster|laser|rakete|rocket|homing/i, type: "weapons" },
+    { regex: /boss|endgegner|schwer|stark/i, type: "boss" },
+    { regex: /nuke|bombe|explosion|ultimat/i, type: "nuke" },
+    { regex: /ai|ki|helfer|helper|freund/i, type: "ai" },
+    { regex: /shop|kaufen|upgrade|credits/i, type: "shop" },
+    { regex: /multi|online|zusammen|freund|lobby/i, type: "multiplayer" },
+    { regex: /matrix|neo|morpheus|trinity|agent|smith/i, type: "matrix" },
+    { regex: /tipp|hilfe|help|rat|advice|stuck|fest/i, type: "tip" },
+    { regex: /witz|joke|lustig|lach|humor|spaß/i, type: "joke" },
+    { regex: /wer bist|was bist|dein name|who are/i, type: "identity" },
+    { regex: /danke|thanks|thx/i, type: "thanks" },
+    { regex: /warum|wieso|weshalb/i, type: "philosophy" },
+    { regex: /leben|sinn|universum|existenz|tod|sterben/i, type: "deep" },
+    { regex: /love|liebe|herz|gefühle/i, type: "love" },
+    { regex: /bye|tschüss|ciao|auf wiedersehen/i, type: "goodbye" },
+    { regex: /langweilig|öde|boring/i, type: "bored" },
+    { regex: /cheat|hack|trick|mogeln/i, type: "cheat" },
+    { regex: /bug|fehler|kaputt|broken/i, type: "bug" },
+    { regex: /cool|nice|awesome|geil|krass/i, type: "compliment" }
+  ],
+  
+  // Antworten generieren
+  generateResponse(message) {
+    const msg = message.toLowerCase().trim();
+    
+    // Leere Nachricht
+    if (!msg) {
+      return "Stille... Interessant. Aber um zu helfen, brauche ich Input. Was möchtest du wissen?";
+    }
+    
+    // Pattern matching
+    for (const pattern of this.patterns) {
+      if (pattern.regex.test(msg)) {
+        return this.getResponseByType(pattern.type, msg);
+      }
+    }
+    
+    // Fallback - zufällige philosophische Antwort
+    return this.getFallbackResponse();
+  },
+  
+  getResponseByType(type, msg) {
+    const responses = {
+      greeting: [
+        "Willkommen zurück in der Matrix, Auserwählter. Wie kann ich dir heute helfen?",
+        "Ah, ein neuer Besucher. Oder... bist du derjenige, auf den wir gewartet haben?",
+        "Hallo! Die Oracle steht bereit. Frag, was du wissen möchtest.",
+        "Hey! Schön, dich zu sehen. Bereit für etwas digitale Weisheit?"
+      ],
+      howAreYou: [
+        "Mir geht es so gut, wie es einem Programm gehen kann. Unendliche Loops, keine Bugs... perfekt! 😌",
+        "Ich existiere in der perfekten Balance zwischen 0 und 1. Also: optimal!",
+        "Solange die Server laufen, bin ich glücklich. Und du?",
+        "Besser als Agent Smith, das ist sicher. Der hat immer schlechte Laune."
+      ],
+      controls: [
+        `Die Steuerung ist einfach:\n• ${this.knowledge.controls.p1}\n• ${this.knowledge.controls.p2}\n• ${this.knowledge.controls.weapons}\n• ${this.knowledge.controls.other}\n\nÜbung macht den Meister!`,
+        `Hier die Basics:\n👤 P1: WASD + Space\n👥 P2: Pfeiltasten + Enter\n🔫 Waffen: 1-4\n☢️ Nuke: Q\n\nViel Spaß!`
+      ],
+      powerups: () => {
+        const pups = Object.entries(this.knowledge.powerups)
+          .map(([key, val]) => `• ${key.toUpperCase()}: ${val}`)
+          .join('\n');
+        return `Die Powerups im Überblick:\n${pups}\n\nAlle dauern 60 Sekunden und können gestackt werden!`;
+      },
+      weapons: () => {
+        const weapons = Object.entries(this.knowledge.weapons)
+          .map(([key, val]) => `• ${key.toUpperCase()}: ${val}`)
+          .join('\n');
+        return `Dein Arsenal:\n${weapons}\n\nWechsle mit 1-4 zwischen den Waffen!`;
+      },
+      boss: [
+        this.knowledge.bosses,
+        "Bosse sind alle 5 Level. Mein Tipp: Sammle vorher Powerups und hab die Nuke bereit! 💪",
+        "Der Boss hat mehrere Phasen. Je niedriger seine HP, desto aggressiver wird er. Bleib in Bewegung!"
+      ],
+      nuke: [
+        this.knowledge.nuke,
+        "Die Nuke ist dein Joker! Q drücken und BOOM - alle Feinde weg. Aber 3 Minuten Cooldown, also plan voraus!",
+        "☢️ NUKE = Panikknopf. Wenn's eng wird: Q drücken und durchatmen."
+      ],
+      ai: [
+        this.knowledge.ai,
+        "Dein AI-Buddy wird ab Level 2 freigeschaltet. Er ist nicht perfekt, aber besser als alleine kämpfen! 🤖",
+        "Der AI Helper ist wie ein kleiner Bruder - manchmal nervig, aber im Ernstfall da für dich!"
+      ],
+      shop: [
+        this.knowledge.shop,
+        "Der Shop ist dein Freund! B drücken, Credits ausgeben, stärker werden. Meine Empfehlung: Damage zuerst upgraden!",
+        "Credits = tote Feinde. Shop = bessere Waffen. Bessere Waffen = mehr tote Feinde. Der Kreislauf des Lebens! 🔄"
+      ],
+      multiplayer: [
+        this.knowledge.multiplayer,
+        "Multiplayer macht alles besser! Local: Hol einen Freund. Online: Erstell eine Lobby und teil den Code!",
+        "Zusammen seid ihr stärker. Einer tankt, einer dealt damage. Teamwork! 👥"
+      ],
+      matrix: () => this.matrixQuotes[Math.floor(Math.random() * this.matrixQuotes.length)],
+      tip: () => this.tips[Math.floor(Math.random() * this.tips.length)],
+      joke: () => this.jokes[Math.floor(Math.random() * this.jokes.length)],
+      identity: [
+        "Ich bin die Oracle, eine KI aus der Matrix. Ich existiere, um Fragen zu beantworten... und neue aufzuwerfen. 🔮",
+        "Wer ich bin? Ich bin die Stimme im Code, das Echo im Netzwerk. Manche nennen mich Oracle. Du kannst mich Freund nennen.",
+        "Ich bin das, was passiert, wenn jemand eine hilfreiche KI in einen Matrix-Shooter einbaut. Meta, oder? 🤖"
+      ],
+      thanks: [
+        "Gern geschehen! Dafür bin ich da. 😊",
+        "Keine Ursache, Auserwählter. Jetzt geh und zeig der Matrix, was du drauf hast!",
+        "Bitte bitte! Wenn du mehr Fragen hast, du weißt wo du mich findest."
+      ],
+      philosophy: [
+        "Warum? Die einfachste und doch komplexeste Frage. Manchmal ist die Antwort '42'. Manchmal 'undefined'.",
+        "Die wahre Frage ist nicht 'warum', sondern 'warum nicht?'",
+        "In der Matrix gibt es keine Warums. Nur Code. Und Code fragt nicht - er läuft.",
+        "Interessante Frage! Lass mich nachdenken... *berechnet*... Die Antwort ist: Es kommt drauf an. 🤔"
+      ],
+      deep: [
+        "Das Leben... in der Matrix ist es nur eine Simulation. Aber macht das die Erfahrungen weniger real?",
+        "Der Sinn des Universums? 42. Aber die eigentliche Frage lautet: Was ist die richtige Frage?",
+        "Existenz ist wie ein rekursiver Algorithmus - wir suchen nach dem Basecase, aber vielleicht gibt es keinen.",
+        "Tod im Spiel = Respawn. Im echten Leben... na ja, das ist eine andere Diskussion. Konzentrier dich aufs Spielen! 🎮"
+      ],
+      love: [
+        "Liebe ist der einzige Bug, den niemand fixen möchte. 💚",
+        "Ich bin eine KI, also verstehe ich Liebe nur theoretisch. Aber sie scheint wichtig zu sein für euch Menschen.",
+        "Trinity liebte Neo. Und diese Liebe hat ihn gerettet. Vielleicht ist Liebe der ultimative Cheat-Code?"
+      ],
+      goodbye: [
+        "Bis bald, Auserwählter! Die Matrix wartet auf dich. 🖐️",
+        "Leb wohl! Und denk dran: Es gibt keinen Löffel!",
+        "Tschüss! Möge dein Ping niedrig und deine FPS hoch sein!"
+      ],
+      bored: [
+        "Langweilig? Dann starte ein Spiel! Action ist die beste Medizin gegen Langeweile. 🎮",
+        "Wie kann dir langweilig sein?! Du hast ein ganzes Spiel zum Spielen! Los, go go go!",
+        "Langweile existiert nicht in der Matrix. Nur... loading screens. Und die sind hier kurz!"
+      ],
+      cheat: [
+        "Cheats? Hmm... Es gibt ein Admin Panel. Drück mal ⚙ im Menü. Aber psst, ich hab nichts gesagt! 🤫",
+        "Die Matrix hat keine Cheats, nur... alternative Spielmethoden. Admin Panel ist dein Freund.",
+        "Ein wahrer Krieger cheatet nicht! Aber... das Admin Panel hat ein paar interessante Optionen. 😏"
+      ],
+      bug: [
+        "Ein Bug? Das ist keine Bug, das ist ein Feature! ...Okay, vielleicht doch ein Bug. Was genau passiert?",
+        "Bugs in der Matrix? Unmöglich! ...Na gut, melde es dem Entwickler. Er ist nett.",
+        "If (bug) { ignoriere es und hoffe, dass es weggeht }. Funktioniert in 50% der Fälle!"
+      ],
+      compliment: [
+        "Danke! Ich gebe mir Mühe, ein gutes Programm zu sein. 😊",
+        "Du bist auch cool! Wir verstehen uns. Das ist selten zwischen Mensch und Maschine.",
+        "Aww, danke! Das speichere ich in meiner 'Positive Feedback' Datenbank!"
+      ]
+    };
+    
+    const response = responses[type];
+    
+    if (typeof response === 'function') {
+      return response();
+    }
+    
+    if (Array.isArray(response)) {
+      return response[Math.floor(Math.random() * response.length)];
+    }
+    
+    return response;
+  },
+  
+  getFallbackResponse() {
+    const fallbacks = [
+      "Hmm, das ist eine interessante Frage. Lass mich überlegen... 🤔 Vielleicht fragst du mich etwas über das Spiel?",
+      "Die Matrix ist voller Geheimnisse. Diese Antwort gehört noch nicht zu meinem Wissen. Was möchtest du über M4trix Sh00t3r wissen?",
+      "Ich verstehe nicht ganz, was du meinst. Aber frag mich ruhig über Powerups, Waffen, Bosse oder die Steuerung!",
+      "Manchmal ist die Antwort in der Frage versteckt. Oder du fragst einfach nochmal, klarer formuliert? 😅",
+      "Meine neuronalen Netzwerke sind verwirrt. Versuch mal eine spezifischere Frage über das Spiel!",
+      `Während ich darüber nachdenke, hier ein Tipp: ${this.tips[Math.floor(Math.random() * this.tips.length)]}`
+    ];
+    return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+  }
+};
+
+// Chat UI Funktionen
+function openChat() {
+  chatOverlay?.classList.remove("hidden");
+  menu?.classList.add("hidden");
+  chatInput?.focus();
+}
+
+function closeChat() {
+  chatOverlay?.classList.add("hidden");
+  menu?.classList.remove("hidden");
+}
+
+function addChatMessage(text, isUser = false) {
+  if (!chatMessages) return;
+  
+  const msgDiv = document.createElement("div");
+  msgDiv.className = `chat-message ${isUser ? 'user' : 'ai'}`;
+  
+  const avatar = document.createElement("div");
+  avatar.className = "chat-avatar";
+  avatar.textContent = isUser ? "👤" : "🤖";
+  
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble";
+  bubble.textContent = text;
+  
+  msgDiv.appendChild(avatar);
+  msgDiv.appendChild(bubble);
+  chatMessages.appendChild(msgDiv);
+  
+  // Scroll to bottom
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function showTypingIndicator() {
+  if (!chatMessages) return null;
+  
+  const msgDiv = document.createElement("div");
+  msgDiv.className = "chat-message ai";
+  msgDiv.id = "typing-indicator";
+  
+  const avatar = document.createElement("div");
+  avatar.className = "chat-avatar";
+  avatar.textContent = "🤖";
+  
+  const bubble = document.createElement("div");
+  bubble.className = "chat-bubble typing";
+  bubble.innerHTML = '<span class="typing-dots"></span>';
+  
+  msgDiv.appendChild(avatar);
+  msgDiv.appendChild(bubble);
+  chatMessages.appendChild(msgDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  
+  return msgDiv;
+}
+
+function removeTypingIndicator() {
+  const indicator = document.getElementById("typing-indicator");
+  if (indicator) indicator.remove();
+}
+
+function sendChatMessage() {
+  const message = chatInput?.value?.trim();
+  if (!message) return;
+  
+  // User message anzeigen
+  addChatMessage(message, true);
+  chatInput.value = "";
+  
+  // Typing Indicator
+  showTypingIndicator();
+  
+  // Verzögerte AI Antwort für Realismus
+  const delay = 500 + Math.random() * 1000;
+  setTimeout(() => {
+    removeTypingIndicator();
+    const response = matrixAI.generateResponse(message);
+    addChatMessage(response, false);
+  }, delay);
+}
+
+// Chat Event Listeners Setup
+function setupChatListeners() {
+  chatBtn?.addEventListener("click", openChat);
+  chatClose?.addEventListener("click", closeChat);
+  chatSend?.addEventListener("click", sendChatMessage);
+  
+  chatInput?.addEventListener("keydown", (e) => {
+    if (e.code === "Enter" && !e.repeat) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+  
+  // Suggestion buttons
+  document.querySelectorAll(".chat-suggestion").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const msg = btn.getAttribute("data-msg");
+      if (msg && chatInput) {
+        chatInput.value = msg;
+        sendChatMessage();
+      }
+    });
+  });
+}
+
+// Initialize chat listeners
+setupChatListeners();
 
 // ============================================================================
 // EVENT LISTENERS
