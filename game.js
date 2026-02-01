@@ -265,6 +265,8 @@ const state = {
   // Ultimate ability
   nukeCooldown: 0, // Nuke ability cooldown (30 seconds)
   nukeReady: true,
+  // Admin panel state
+  wasRunning: true,
 };
 
 const player = {
@@ -944,15 +946,8 @@ function gameOver() {
   overlayTitle.textContent = "Game Over";
   overlaySubtitle.textContent = `Score: ${state.score}`;
   // Show game over buttons (restart visible, resume hidden)
-  // In multiplayer, hide restart button - players should return to menu
   if (resumeBtn) resumeBtn.classList.add("hidden");
-  if (restartBtn) {
-    if (state.multiplayer) {
-      restartBtn.classList.add("hidden");
-    } else {
-      restartBtn.classList.remove("hidden");
-    }
-  }
+  if (restartBtn) restartBtn.classList.remove("hidden");
   playGameOver();
   stopBgm();
   saveHighscore();
@@ -3472,13 +3467,23 @@ function updateNukeButton() {
 function toggleAdmin(forceOpen) {
   const isOpen = !adminPanel.classList.contains("hidden");
   if (forceOpen === true || (!isOpen && forceOpen !== false)) {
+    // Opening admin panel
     adminWasPaused = state.paused;
-    if (!state.inMenu) state.paused = true;
+    state.wasRunning = state.running; // Save running state
+    if (!state.inMenu && state.running) {
+      state.paused = true;
+    }
     adminPanel.classList.remove("hidden");
     populateAdmin();
   } else {
+    // Closing admin panel - restore previous state, DON'T restart
     adminPanel.classList.add("hidden");
-    if (!state.inMenu && !adminWasPaused) state.paused = false;
+    if (!state.inMenu && state.wasRunning) {
+      // Only unpause if we paused it when opening
+      if (!adminWasPaused) {
+        state.paused = false;
+      }
+    }
   }
 }
 
