@@ -19,7 +19,9 @@ const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlaySubtitle = document.getElementById("overlay-subtitle");
 const overlayButtons = document.getElementById("overlay-buttons");
+const resumeBtn = document.getElementById("resume-btn");
 const restartBtn = document.getElementById("restart-btn");
+const adminOverlayBtn = document.getElementById("admin-overlay-btn");
 const menuBtn = document.getElementById("menu-btn");
 const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start-btn");
@@ -835,9 +837,15 @@ function togglePause() {
   state.paused = !state.paused;
   overlay.classList.toggle("hidden", !state.paused);
   overlayTitle.textContent = state.paused ? "Paused" : "";
-  overlaySubtitle.textContent = state.paused ? "Press P to continue" : "";
-  // Hide game over buttons when pausing (not game over)
-  if (overlayButtons) overlayButtons.classList.add("hidden");
+  overlaySubtitle.textContent = state.paused ? "" : "";
+  
+  // Show/hide appropriate buttons for pause vs game over
+  if (state.paused) {
+    if (resumeBtn) resumeBtn.classList.remove("hidden");
+    if (restartBtn) restartBtn.classList.add("hidden");
+  } else {
+    if (resumeBtn) resumeBtn.classList.add("hidden");
+  }
 }
 
 function gameOver() {
@@ -845,8 +853,9 @@ function gameOver() {
   overlay.classList.remove("hidden");
   overlayTitle.textContent = "Game Over";
   overlaySubtitle.textContent = `Score: ${state.score}`;
-  // Show buttons for mobile users
-  if (overlayButtons) overlayButtons.classList.remove("hidden");
+  // Show game over buttons (restart visible, resume hidden)
+  if (resumeBtn) resumeBtn.classList.add("hidden");
+  if (restartBtn) restartBtn.classList.remove("hidden");
   playGameOver();
   stopBgm();
   saveHighscore();
@@ -910,7 +919,8 @@ function reset() {
   state.currentWeapon = 1;
   
   overlay.classList.add("hidden");
-  if (overlayButtons) overlayButtons.classList.add("hidden");
+  if (resumeBtn) resumeBtn.classList.add("hidden");
+  if (restartBtn) restartBtn.classList.add("hidden");
   bullets.length = 0;
   allyBullets.length = 0;
   enemyBullets.length = 0;
@@ -3472,16 +3482,26 @@ storySkip?.addEventListener("click", () => endStory());
 levelShop?.addEventListener("click", () => { levelComplete.classList.add("hidden"); openShop(); });
 levelContinue?.addEventListener("click", () => continueFromLevelComplete());
 
-// Game Over buttons
+// Overlay buttons (Pause & Game Over)
+resumeBtn?.addEventListener("click", () => {
+  togglePause();
+});
+
 restartBtn?.addEventListener("click", () => {
   overlay.classList.add("hidden");
-  if (overlayButtons) overlayButtons.classList.add("hidden");
+  if (resumeBtn) resumeBtn.classList.add("hidden");
+  if (restartBtn) restartBtn.classList.add("hidden");
   reset();
+});
+
+adminOverlayBtn?.addEventListener("click", () => {
+  toggleAdmin(true);
 });
 
 menuBtn?.addEventListener("click", () => {
   overlay.classList.add("hidden");
-  if (overlayButtons) overlayButtons.classList.add("hidden");
+  if (resumeBtn) resumeBtn.classList.add("hidden");
+  if (restartBtn) restartBtn.classList.add("hidden");
   openMenu();
 });
 
