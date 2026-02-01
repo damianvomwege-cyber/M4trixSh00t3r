@@ -267,6 +267,14 @@ const state = {
   nukeReady: true,
   // Admin panel state
   wasRunning: true,
+  // Admin cheats
+  godMode: false,
+  infiniteAmmo: false,
+  p2GodMode: false,
+  spawningEnabled: true,
+  enemySpeedMultiplier: 1,
+  enemyHpMultiplier: 1,
+  aiDamageMultiplier: 1,
 };
 
 const player = {
@@ -2315,12 +2323,12 @@ function updateParticles(delta) {
 // COLLISION DETECTION
 // ============================================================================
 function checkCollisions() {
-  // Player vs enemies (skip if P1 is dead or invincible)
+  // Player vs enemies (skip if P1 is dead, invincible, or godmode)
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     
-    // Skip P1 collision if dead or invincible
-    if (state.p1Dead || state.p1Invincible > 0) {
+    // Skip P1 collision if dead, invincible, or godmode
+    if (state.p1Dead || state.p1Invincible > 0 || state.godMode) {
       checkBulletHits(enemy, i);
       continue;
     }
@@ -2359,8 +2367,8 @@ function checkCollisions() {
     checkBulletHits(enemy, i);
   }
   
-  // Player vs enemy bullets (skip if P1 is dead or invincible)
-  if (!state.p1Dead && state.p1Invincible <= 0) {
+  // Player vs enemy bullets (skip if P1 is dead, invincible, or godmode)
+  if (!state.p1Dead && state.p1Invincible <= 0 && !state.godMode) {
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
       if (rectsOverlap(player, enemyBullets[i])) {
         const b = enemyBullets[i];
@@ -2411,7 +2419,7 @@ function checkCollisions() {
   // In online multiplayer: Host checks player2 collision only for LOCAL player2 (but player2 is remote for host)
   // So we skip player2 collision entirely if online AND we are host (player2 is remote, they handle their own)
   const shouldCheckPlayer2Collisions = player2.active && 
-    (!state.onlineMultiplayer || !netState.isHost);
+    (!state.onlineMultiplayer || !netState.isHost) && !state.p2GodMode;
   
   if (shouldCheckPlayer2Collisions && player2.invincibleTimer <= 0) {
     for (let i = enemies.length - 1; i >= 0; i--) {
@@ -3060,6 +3068,9 @@ function drawDamageNumbers() {
 // SPAWNING LOGIC
 // ============================================================================
 function updateSpawns(delta) {
+  // Skip spawning if disabled
+  if (!state.spawningEnabled) return;
+  
   // Check for boss spawn
   if (!state.bossActive && state.level > 0 && state.level % 5 === 0 && state.bossLevel !== state.level) {
     spawnBoss();
@@ -3488,42 +3499,95 @@ function toggleAdmin(forceOpen) {
 }
 
 function populateAdmin() {
-  document.getElementById("admin-level").value = state.level;
-  document.getElementById("admin-lives").value = state.lives;
-  document.getElementById("admin-score").value = state.score;
-  document.getElementById("admin-credits").value = state.credits;
-  document.getElementById("admin-spawn").value = state.spawnInterval;
-  document.getElementById("admin-aiunlock").value = state.aiUnlockLevel;
-  document.getElementById("admin-ailives").value = ally.lives;
-  document.getElementById("admin-ai").checked = state.aiEnabled;
-  document.getElementById("admin-weapon").value = state.currentWeapon;
-  document.getElementById("admin-rapidlevel").value = state.rapidLevel;
-  document.getElementById("admin-rapidtime").value = Math.ceil(state.rapid);
-  document.getElementById("admin-shieldtime").value = Math.ceil(state.shield);
-  document.getElementById("admin-speedtime").value = Math.ceil(state.speed);
-  document.getElementById("admin-spreadtime").value = Math.ceil(state.spread);
-  document.getElementById("admin-sfx").value = audioState.sfxVolume;
-  document.getElementById("admin-bgm").value = audioState.bgmVolume;
+  const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+  const setChk = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+  
+  // Player
+  setVal("admin-lives", state.lives);
+  setVal("admin-score", state.score);
+  setVal("admin-credits", state.credits);
+  setVal("admin-level", state.level);
+  setVal("admin-playerspeed", player.speed);
+  setVal("admin-damage", state.damageMultiplier);
+  setChk("admin-invincible", state.godMode || false);
+  setChk("admin-infiniteammo", state.infiniteAmmo || false);
+  
+  // Weapons & Powerups
+  setVal("admin-weapon", state.currentWeapon);
+  setVal("admin-rapidlevel", state.rapidLevel);
+  setVal("admin-rapidtime", Math.ceil(state.rapid));
+  setVal("admin-shieldtime", Math.ceil(state.shield));
+  setVal("admin-speedtime", Math.ceil(state.speed));
+  setVal("admin-spreadtime", Math.ceil(state.spread));
+  setVal("admin-nukecooldown", Math.ceil(state.nukeCooldown));
+  setVal("admin-combo", state.combo);
+  
+  // Enemies
+  setVal("admin-spawn", state.spawnInterval);
+  setVal("admin-enemyspeed", state.enemySpeedMultiplier || 1);
+  setVal("admin-enemyhp", state.enemyHpMultiplier || 1);
+  setChk("admin-spawning", state.spawningEnabled !== false);
+  
+  // AI
+  setChk("admin-ai", state.aiEnabled);
+  setVal("admin-ailives", ally.lives);
+  setVal("admin-aiunlock", state.aiUnlockLevel);
+  setVal("admin-aidamage", state.aiDamageMultiplier || 1);
+  
+  // Multiplayer
+  setVal("admin-p2lives", player2.lives);
+  setChk("admin-p2active", player2.active);
+  setChk("admin-p2invincible", state.p2GodMode || false);
+  
+  // Audio
+  setVal("admin-sfx", audioState.sfxVolume);
+  setVal("admin-bgm", audioState.bgmVolume);
 }
 
 function applyAdminSettings() {
   const toNum = (id, def) => parseFloat(document.getElementById(id)?.value) || def;
+  const toChk = (id) => document.getElementById(id)?.checked || false;
   
-  state.level = Math.max(1, Math.floor(toNum("admin-level", 1)));
+  // Player
   state.lives = Math.max(0, Math.floor(toNum("admin-lives", 3)));
   state.score = Math.max(0, Math.floor(toNum("admin-score", 0)));
   state.credits = Math.max(0, Math.floor(toNum("admin-credits", 0)));
-  state.spawnInterval = Math.max(0.2, toNum("admin-spawn", 1.2));
-  state.aiUnlockLevel = Math.max(1, Math.floor(toNum("admin-aiunlock", 2)));
-  ally.lives = Math.max(0, Math.floor(toNum("admin-ailives", 3)));
-  state.aiEnabled = document.getElementById("admin-ai")?.checked || false;
-  ally.active = state.aiEnabled;
+  state.level = Math.max(1, Math.floor(toNum("admin-level", 1)));
+  player.speed = Math.max(50, toNum("admin-playerspeed", 280));
+  state.damageMultiplier = Math.max(0.1, toNum("admin-damage", 1));
+  state.godMode = toChk("admin-invincible");
+  state.infiniteAmmo = toChk("admin-infiniteammo");
+  
+  // Weapons & Powerups
   state.currentWeapon = Math.min(4, Math.max(1, Math.floor(toNum("admin-weapon", 1))));
   state.rapidLevel = Math.max(0, Math.floor(toNum("admin-rapidlevel", 0)));
   state.rapid = Math.max(0, toNum("admin-rapidtime", 0));
   state.shield = Math.max(0, toNum("admin-shieldtime", 0));
   state.speed = Math.max(0, toNum("admin-speedtime", 0));
   state.spread = Math.max(0, toNum("admin-spreadtime", 0));
+  state.nukeCooldown = Math.max(0, toNum("admin-nukecooldown", 0));
+  state.nukeReady = state.nukeCooldown <= 0;
+  state.combo = Math.max(0, Math.floor(toNum("admin-combo", 0)));
+  
+  // Enemies
+  state.spawnInterval = Math.max(0.1, toNum("admin-spawn", 1.2));
+  state.enemySpeedMultiplier = Math.max(0.1, toNum("admin-enemyspeed", 1));
+  state.enemyHpMultiplier = Math.max(0.1, toNum("admin-enemyhp", 1));
+  state.spawningEnabled = toChk("admin-spawning");
+  
+  // AI
+  state.aiEnabled = toChk("admin-ai");
+  ally.active = state.aiEnabled;
+  ally.lives = Math.max(0, Math.floor(toNum("admin-ailives", 3)));
+  state.aiUnlockLevel = Math.max(1, Math.floor(toNum("admin-aiunlock", 2)));
+  state.aiDamageMultiplier = Math.max(0.1, toNum("admin-aidamage", 1));
+  
+  // Multiplayer
+  player2.lives = Math.max(0, Math.floor(toNum("admin-p2lives", 3)));
+  player2.active = toChk("admin-p2active");
+  state.p2GodMode = toChk("admin-p2invincible");
+  
+  // Audio
   audioState.sfxVolume = Math.max(0, Math.min(1, toNum("admin-sfx", 1)));
   audioState.bgmVolume = Math.max(0, Math.min(1, toNum("admin-bgm", 1)));
   
@@ -3547,6 +3611,77 @@ function applyAdminSettings() {
   config.spreadTime = state.spread;
   
   updateHud();
+  addDamageNumber(state.width / 2, state.height / 2, "⚙ SETTINGS APPLIED!", false);
+}
+
+// ============================================================================
+// ADMIN QUICK ACTIONS
+// ============================================================================
+function adminGodMode() {
+  state.godMode = !state.godMode;
+  state.p1Invincible = state.godMode ? 9999 : 0;
+  addDamageNumber(state.width / 2, state.height / 2, state.godMode ? "🛡️ GOD MODE ON!" : "GOD MODE OFF", !state.godMode);
+  updateHud();
+}
+
+function adminNukeNow() {
+  state.nukeCooldown = 0;
+  state.nukeReady = true;
+  activateNuke();
+}
+
+function adminSpawnBoss() {
+  spawnBoss();
+  addDamageNumber(state.width / 2, state.height / 2, "👹 BOSS SPAWNED!", true);
+}
+
+function adminKillAll() {
+  let killCount = 0;
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    addExplosion(enemies[i].x + enemies[i].w / 2, enemies[i].y + enemies[i].h / 2, "#ff00ff", 15);
+    enemies.splice(i, 1);
+    killCount++;
+  }
+  enemyBullets.length = 0;
+  addDamageNumber(state.width / 2, state.height / 2, `💀 ${killCount} KILLED!`, false);
+  playExplosion();
+}
+
+function adminMaxPowerups() {
+  state.rapid = 120;
+  state.rapidLevel = 20;
+  state.shield = 120;
+  state.speed = 120;
+  state.spread = 120;
+  state.nukeCooldown = 0;
+  state.nukeReady = true;
+  addDamageNumber(state.width / 2, state.height / 2, "🌟 MAX POWERUPS!", false);
+  updateHud();
+}
+
+function adminUnlockAll() {
+  // Unlock all weapons
+  WEAPONS.forEach(w => w.unlocked = true);
+  // Unlock all achievements
+  ACHIEVEMENTS.forEach(a => {
+    if (!unlockedAchievements.includes(a.id)) {
+      unlockedAchievements.push(a.id);
+    }
+  });
+  saveAchievements();
+  addDamageNumber(state.width / 2, state.height / 2, "🔓 ALL UNLOCKED!", false);
+  updateHud();
+}
+
+function adminAddCredits() {
+  state.credits += 1000;
+  addDamageNumber(state.width / 2, state.height / 2, "💰 +1000 CREDITS!", false);
+  updateHud();
+}
+
+function adminNextLevel() {
+  nextLevel();
+  addDamageNumber(state.width / 2, state.height / 2, `⬆️ LEVEL ${state.level}!`, false);
 }
 
 function resetAllProgress() {
@@ -3948,6 +4083,17 @@ adminBtn?.addEventListener("click", () => toggleAdmin(true));
 adminApply?.addEventListener("click", () => applyAdminSettings());
 adminClose?.addEventListener("click", () => toggleAdmin(false));
 adminReset?.addEventListener("click", () => resetAllProgress());
+
+// Admin Quick Actions
+document.getElementById("admin-godmode")?.addEventListener("click", adminGodMode);
+document.getElementById("admin-nuke-now")?.addEventListener("click", adminNukeNow);
+document.getElementById("admin-spawn-boss")?.addEventListener("click", adminSpawnBoss);
+document.getElementById("admin-kill-all")?.addEventListener("click", adminKillAll);
+document.getElementById("admin-max-powerups")?.addEventListener("click", adminMaxPowerups);
+document.getElementById("admin-unlock-all")?.addEventListener("click", adminUnlockAll);
+document.getElementById("admin-add-credits")?.addEventListener("click", adminAddCredits);
+document.getElementById("admin-next-level")?.addEventListener("click", adminNextLevel);
+
 shopClose?.addEventListener("click", () => closeShop());
 achievementsClose?.addEventListener("click", () => achievementsPanel.classList.add("hidden"));
 highscoreClose?.addEventListener("click", () => highscoresPanel.classList.add("hidden"));

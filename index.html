@@ -131,38 +131,106 @@
       </div>
     </div>
 
-    <!-- Admin Panel -->
+    <!-- Admin Panel - SUPER POWERFUL -->
     <div id="admin" class="overlay hidden">
-      <div class="panel admin-panel">
-        <div class="panel-title">Admin Panel</div>
-        <div class="panel-text">Adjust gameplay and audio settings.</div>
-        <div class="admin-grid">
-          <label>Level <input id="admin-level" type="number" min="1" value="1" /></label>
-          <label>Lives <input id="admin-lives" type="number" min="0" value="3" /></label>
-          <label>Score <input id="admin-score" type="number" min="0" value="0" /></label>
-          <label>Credits <input id="admin-credits" type="number" min="0" value="0" /></label>
-          <label>Spawn Interval (s) <input id="admin-spawn" type="number" step="0.1" min="0.2" value="1.2" /></label>
-          <label>AI Unlock Level <input id="admin-aiunlock" type="number" min="1" value="2" /></label>
-          <label>AI Lives <input id="admin-ailives" type="number" min="0" value="3" /></label>
-          <label>AI Enabled <input id="admin-ai" type="checkbox" /></label>
-          <label>Weapon (1-4) <input id="admin-weapon" type="number" min="1" max="4" value="1" /></label>
-          <label>Rapid Level <input id="admin-rapidlevel" type="number" min="0" value="0" /></label>
-          <label>Rapid Time (s) <input id="admin-rapidtime" type="number" min="0" value="0" /></label>
-          <label>Shield Time (s) <input id="admin-shieldtime" type="number" min="0" value="0" /></label>
-          <label>Speed Time (s) <input id="admin-speedtime" type="number" min="0" value="0" /></label>
-          <label>Spread Time (s) <input id="admin-spreadtime" type="number" min="0" value="0" /></label>
-          <label>SFX Volume <input id="admin-sfx" type="number" step="0.05" min="0" max="1" value="1" /></label>
-          <label>BGM Volume <input id="admin-bgm" type="number" step="0.05" min="0" max="1" value="1" /></label>
-          <label>Life % <input id="admin-life" type="number" min="0" max="100" value="20" /></label>
-          <label>Speed % <input id="admin-speed" type="number" min="0" max="100" value="10" /></label>
-          <label>Rapid % <input id="admin-rapid" type="number" min="0" max="100" value="60" /></label>
-          <label>Shield % <input id="admin-shield" type="number" min="0" max="100" value="10" /></label>
-          <label>Spread % <input id="admin-spread" type="number" min="0" max="100" value="0" /></label>
+      <div class="panel admin-panel-mega">
+        <div class="panel-title">🔧 ADMIN PANEL 🔧</div>
+        
+        <!-- Quick Actions -->
+        <div class="admin-section">
+          <div class="admin-section-title">⚡ QUICK ACTIONS</div>
+          <div class="admin-buttons">
+            <button id="admin-godmode" class="btn admin-btn-special">🛡️ GOD MODE</button>
+            <button id="admin-nuke-now" class="btn admin-btn-special">☢️ NUKE NOW</button>
+            <button id="admin-spawn-boss" class="btn admin-btn-special">👹 SPAWN BOSS</button>
+            <button id="admin-kill-all" class="btn admin-btn-special">💀 KILL ALL</button>
+            <button id="admin-max-powerups" class="btn admin-btn-special">🌟 MAX POWERUPS</button>
+            <button id="admin-unlock-all" class="btn admin-btn-special">🔓 UNLOCK ALL</button>
+            <button id="admin-add-credits" class="btn admin-btn-special">💰 +1000 CREDITS</button>
+            <button id="admin-next-level" class="btn admin-btn-special">⬆️ NEXT LEVEL</button>
+          </div>
         </div>
+
+        <!-- Player Stats -->
+        <div class="admin-section">
+          <div class="admin-section-title">👤 PLAYER</div>
+          <div class="admin-grid">
+            <label>Lives <input id="admin-lives" type="number" min="0" value="3" /></label>
+            <label>Score <input id="admin-score" type="number" min="0" value="0" /></label>
+            <label>Credits <input id="admin-credits" type="number" min="0" value="0" /></label>
+            <label>Level <input id="admin-level" type="number" min="1" value="1" /></label>
+            <label>Speed <input id="admin-playerspeed" type="number" min="50" max="1000" value="280" /></label>
+            <label>Damage Multi <input id="admin-damage" type="number" step="0.1" min="0.1" max="10" value="1" /></label>
+            <label>Invincible <input id="admin-invincible" type="checkbox" /></label>
+            <label>Infinite Ammo <input id="admin-infiniteammo" type="checkbox" /></label>
+          </div>
+        </div>
+
+        <!-- Weapons & Powerups -->
+        <div class="admin-section">
+          <div class="admin-section-title">🔫 WEAPONS & POWERUPS</div>
+          <div class="admin-grid">
+            <label>Weapon (1-4) <input id="admin-weapon" type="number" min="1" max="4" value="1" /></label>
+            <label>Rapid Level <input id="admin-rapidlevel" type="number" min="0" max="20" value="0" /></label>
+            <label>Rapid Time <input id="admin-rapidtime" type="number" min="0" value="0" /></label>
+            <label>Shield Time <input id="admin-shieldtime" type="number" min="0" value="0" /></label>
+            <label>Speed Time <input id="admin-speedtime" type="number" min="0" value="0" /></label>
+            <label>Spread Time <input id="admin-spreadtime" type="number" min="0" value="0" /></label>
+            <label>Nuke Cooldown <input id="admin-nukecooldown" type="number" min="0" value="0" /></label>
+            <label>Combo <input id="admin-combo" type="number" min="0" value="0" /></label>
+          </div>
+        </div>
+
+        <!-- Enemy Settings -->
+        <div class="admin-section">
+          <div class="admin-section-title">👾 ENEMIES</div>
+          <div class="admin-grid">
+            <label>Spawn Interval <input id="admin-spawn" type="number" step="0.1" min="0.1" value="1.2" /></label>
+            <label>Enemy Speed Multi <input id="admin-enemyspeed" type="number" step="0.1" min="0.1" max="5" value="1" /></label>
+            <label>Enemy HP Multi <input id="admin-enemyhp" type="number" step="0.1" min="0.1" max="5" value="1" /></label>
+            <label>Spawn Enemies <input id="admin-spawning" type="checkbox" checked /></label>
+          </div>
+        </div>
+
+        <!-- AI Settings -->
+        <div class="admin-section">
+          <div class="admin-section-title">🤖 AI HELPER</div>
+          <div class="admin-grid">
+            <label>AI Enabled <input id="admin-ai" type="checkbox" /></label>
+            <label>AI Lives <input id="admin-ailives" type="number" min="0" value="3" /></label>
+            <label>AI Unlock Level <input id="admin-aiunlock" type="number" min="1" value="2" /></label>
+            <label>AI Damage <input id="admin-aidamage" type="number" step="0.1" min="0.1" max="10" value="1" /></label>
+          </div>
+        </div>
+
+        <!-- Multiplayer -->
+        <div class="admin-section">
+          <div class="admin-section-title">👥 MULTIPLAYER</div>
+          <div class="admin-grid">
+            <label>P2 Lives <input id="admin-p2lives" type="number" min="0" value="3" /></label>
+            <label>P2 Active <input id="admin-p2active" type="checkbox" /></label>
+            <label>P2 Invincible <input id="admin-p2invincible" type="checkbox" /></label>
+          </div>
+        </div>
+
+        <!-- Audio & Spawn Rates -->
+        <div class="admin-section">
+          <div class="admin-section-title">🔊 AUDIO & SPAWN RATES</div>
+          <div class="admin-grid">
+            <label>SFX Volume <input id="admin-sfx" type="number" step="0.05" min="0" max="1" value="1" /></label>
+            <label>BGM Volume <input id="admin-bgm" type="number" step="0.05" min="0" max="1" value="1" /></label>
+            <label>Life % <input id="admin-life" type="number" min="0" max="100" value="20" /></label>
+            <label>Speed % <input id="admin-speed" type="number" min="0" max="100" value="10" /></label>
+            <label>Rapid % <input id="admin-rapid" type="number" min="0" max="100" value="60" /></label>
+            <label>Shield % <input id="admin-shield" type="number" min="0" max="100" value="10" /></label>
+            <label>Spread % <input id="admin-spread" type="number" min="0" max="100" value="0" /></label>
+          </div>
+        </div>
+
         <div class="admin-actions">
-          <button id="admin-apply" class="btn">Apply</button>
-          <button id="admin-close" class="btn">Close</button>
-          <button id="admin-reset" class="btn" style="background:#ff2255;">Reset Progress</button>
+          <button id="admin-apply" class="btn btn-large">✅ APPLY</button>
+          <button id="admin-close" class="btn">❌ CLOSE</button>
+          <button id="admin-reset" class="btn" style="background:#ff2255;">🗑️ RESET ALL</button>
         </div>
       </div>
     </div>
