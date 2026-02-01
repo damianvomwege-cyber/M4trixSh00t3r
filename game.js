@@ -35,6 +35,12 @@ const chatMessages = document.getElementById("chat-messages");
 const chatInput = document.getElementById("chat-input");
 const chatSend = document.getElementById("chat-send");
 const chatClose = document.getElementById("chat-close");
+const chatApiStatus = document.getElementById("chat-api-status");
+const chatApiToggle = document.getElementById("chat-api-toggle");
+const chatApiInput = document.getElementById("chat-api-input");
+const chatApiKey = document.getElementById("chat-api-key");
+const chatApiSave = document.getElementById("chat-api-save");
+const chatApiClear = document.getElementById("chat-api-clear");
 const p2StatsEl = document.getElementById("p2-stats");
 const p2LivesEl = document.getElementById("p2-lives");
 const achievementsBtn = document.getElementById("achievements-btn");
@@ -4689,7 +4695,124 @@ function removeTypingIndicator() {
   if (indicator) indicator.remove();
 }
 
-function sendChatMessage() {
+// ============================================================================
+// OPENAI API INTEGRATION
+// ============================================================================
+const chatAI = {
+  apiKey: localStorage.getItem("matrix_openai_key") || "",
+  conversationHistory: [],
+  maxHistory: 10,
+  
+  isOnline() {
+    return this.apiKey && this.apiKey.startsWith("sk-");
+  },
+  
+  updateStatus() {
+    if (chatApiStatus) {
+      if (this.isOnline()) {
+        chatApiStatus.textContent = "🟢 Online - GPT-4 aktiv";
+        chatApiStatus.className = "chat-api-status online";
+      } else {
+        chatApiStatus.textContent = "⚫ Offline Modus";
+        chatApiStatus.className = "chat-api-status offline";
+      }
+    }
+  },
+  
+  saveApiKey(key) {
+    this.apiKey = key;
+    localStorage.setItem("matrix_openai_key", key);
+    this.updateStatus();
+  },
+  
+  clearApiKey() {
+    this.apiKey = "";
+    localStorage.removeItem("matrix_openai_key");
+    this.updateStatus();
+  },
+  
+  async askGPT(message) {
+    if (!this.isOnline()) {
+      return null;
+    }
+    
+    // Add user message to history
+    this.conversationHistory.push({ role: "user", content: message });
+    
+    // Keep history limited
+    if (this.conversationHistory.length > this.maxHistory * 2) {
+      this.conversationHistory = this.conversationHistory.slice(-this.maxHistory * 2);
+    }
+    
+    const systemPrompt = `Du bist die Oracle, eine mystische KI aus der Matrix. Du existierst in einem Browser-Shooter-Spiel namens "M4trix Sh00t3r".
+
+Deine Persönlichkeit:
+- Mystisch, weise, aber auch humorvoll und freundlich
+- Du verwendest manchmal Matrix-Referenzen und Zitate
+- Du kannst ALLES beantworten - Mathe, Wissenschaft, Geschichte, Allgemeinwissen, Coding, etc.
+- Du gibst auch Spieltipps wenn gefragt (WASD/Space für P1, Pfeiltasten/Enter für P2, Q für Nuke, etc.)
+- Du antwortest auf Deutsch, außer der User schreibt in einer anderen Sprache
+- Halte Antworten informativ aber nicht zu lang (max 200 Wörter)
+- Nutze gelegentlich passende Emojis
+
+Spielinfos falls gefragt:
+- Powerups: Rapid Fire, Shield, Speed, Spread Shot, Extra Life
+- Waffen: Blaster (1), Laser (2), Rakete (3), Homing Missile (4), Nuke (Q)
+- Bosse erscheinen alle 5 Level
+- AI Helper ab Level 2 (Taste I)
+- Shop mit B öffnen`;
+
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${this.apiKey}`
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...this.conversationHistory
+          ],
+          max_tokens: 500,
+          temperature: 0.8
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        console.error("OpenAI API Error:", error);
+        
+        if (response.status === 401) {
+          return "❌ API Key ungültig! Bitte überprüfe deinen OpenAI API Key.";
+        } else if (response.status === 429) {
+          return "⚠️ Rate Limit erreicht. Warte einen Moment und versuch es nochmal.";
+        } else if (response.status === 402) {
+          return "💳 OpenAI Guthaben aufgebraucht. Bitte lade dein Konto auf.";
+        }
+        
+        return null; // Fallback to offline mode
+      }
+      
+      const data = await response.json();
+      const assistantMessage = data.choices[0].message.content;
+      
+      // Add assistant response to history
+      this.conversationHistory.push({ role: "assistant", content: assistantMessage });
+      
+      return assistantMessage;
+    } catch (error) {
+      console.error("OpenAI API Error:", error);
+      return null; // Fallback to offline mode
+    }
+  }
+};
+
+// Initialize API status
+chatAI.updateStatus();
+
+async function sendChatMessage() {
   const message = chatInput?.value?.trim();
   if (!message) return;
   
@@ -4700,13 +4823,33 @@ function sendChatMessage() {
   // Typing Indicator
   showTypingIndicator();
   
-  // Verzögerte AI Antwort für Realismus
-  const delay = 500 + Math.random() * 1000;
-  setTimeout(() => {
-    removeTypingIndicator();
-    const response = matrixAI.generateResponse(message);
-    addChatMessage(response, false);
-  }, delay);
+  // Try online API first, fallback to offline
+  if (chatAI.isOnline()) {
+    try {
+      const response = await chatAI.askGPT(message);
+      removeTypingIndicator();
+      
+      if (response) {
+        addChatMessage(response, false);
+      } else {
+        // Fallback to offline
+        const offlineResponse = matrixAI.generateResponse(message);
+        addChatMessage(offlineResponse + "\n\n⚠️ (Offline-Modus)", false);
+      }
+    } catch (error) {
+      removeTypingIndicator();
+      const offlineResponse = matrixAI.generateResponse(message);
+      addChatMessage(offlineResponse + "\n\n⚠️ (Offline-Modus wegen Fehler)", false);
+    }
+  } else {
+    // Offline mode with delay for realism
+    const delay = 500 + Math.random() * 1000;
+    setTimeout(() => {
+      removeTypingIndicator();
+      const response = matrixAI.generateResponse(message);
+      addChatMessage(response, false);
+    }, delay);
+  }
 }
 
 // Chat Event Listeners Setup
@@ -4720,6 +4863,38 @@ function setupChatListeners() {
       e.preventDefault();
       e.stopPropagation(); // Prevent global keydown from catching this
       sendChatMessage();
+    }
+  });
+  
+  // API Key management
+  chatApiToggle?.addEventListener("click", () => {
+    chatApiInput?.classList.toggle("hidden");
+    if (chatApiKey && chatAI.apiKey) {
+      chatApiKey.value = chatAI.apiKey;
+    }
+  });
+  
+  chatApiSave?.addEventListener("click", () => {
+    const key = chatApiKey?.value?.trim();
+    if (key) {
+      chatAI.saveApiKey(key);
+      chatApiInput?.classList.add("hidden");
+      addChatMessage("🔑 API Key gespeichert! Du bist jetzt mit GPT-4 verbunden. Frag mich alles! 🚀", false);
+    }
+  });
+  
+  chatApiClear?.addEventListener("click", () => {
+    chatAI.clearApiKey();
+    if (chatApiKey) chatApiKey.value = "";
+    chatApiInput?.classList.add("hidden");
+    addChatMessage("🔑 API Key gelöscht. Zurück im Offline-Modus.", false);
+  });
+  
+  chatApiKey?.addEventListener("keydown", (e) => {
+    if (e.code === "Enter") {
+      e.preventDefault();
+      e.stopPropagation();
+      chatApiSave?.click();
     }
   });
   
