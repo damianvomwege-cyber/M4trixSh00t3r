@@ -3060,6 +3060,20 @@ function tick(timestamp) {
 window.addEventListener("keydown", (event) => {
   initAudio();
   
+  // Ignore keyboard events when chat input is focused
+  if (document.activeElement === chatInput) {
+    return;
+  }
+  
+  // Ignore keyboard events when chat overlay is visible
+  if (chatOverlay && !chatOverlay.classList.contains("hidden")) {
+    // Only allow Escape to close chat
+    if (event.code === "Escape") {
+      closeChat();
+    }
+    return;
+  }
+  
   // Weapon switching
   if (event.key >= "1" && event.key <= "4") {
     const weaponId = parseInt(event.key);
@@ -4704,6 +4718,7 @@ function setupChatListeners() {
   chatInput?.addEventListener("keydown", (e) => {
     if (e.code === "Enter" && !e.repeat) {
       e.preventDefault();
+      e.stopPropagation(); // Prevent global keydown from catching this
       sendChatMessage();
     }
   });
