@@ -250,6 +250,10 @@ const state = {
   slowMoFactor: 1,
   flash: 0,
   flashColor: "#ffffff",
+  // Multiplayer respawn
+  p1RespawnTimer: 0,
+  p2RespawnTimer: 0,
+  p1Dead: false,
 };
 
 const player = {
@@ -849,6 +853,66 @@ function togglePause() {
   }
 }
 
+function checkGameOver() {
+  // In multiplayer, game continues if at least one player is alive
+  if (state.multiplayer) {
+    const p1Alive = state.lives > 0;
+    const p2Alive = player2.lives > 0;
+    
+    if (!p1Alive && !p2Alive) {
+      gameOver();
+    } else if (!p1Alive && state.p1RespawnTimer <= 0) {
+      // P1 is down but P2 is alive - start respawn timer
+      state.p1RespawnTimer = 5; // 5 seconds to respawn
+      addDamageNumber(state.width / 2, state.height / 2, "P1 DOWN! Respawn in 5s", true);
+    } else if (!p2Alive && state.p2RespawnTimer <= 0 && player2.active === false) {
+      // P2 is down but P1 is alive - start respawn timer  
+      state.p2RespawnTimer = 5; // 5 seconds to respawn
+      addDamageNumber(state.width / 2, state.height / 2, "P2 DOWN! Respawn in 5s", true);
+    }
+  } else {
+    // Single player - normal game over
+    if (state.lives <= 0) {
+      gameOver();
+    }
+  }
+}
+
+function updateRespawns(delta) {
+  if (!state.multiplayer) return;
+  
+  // Update P1 respawn timer
+  if (state.p1RespawnTimer > 0) {
+    state.p1RespawnTimer -= delta;
+    if (state.p1RespawnTimer <= 0) {
+      // Respawn P1
+      state.lives = 1;
+      state.p1Dead = false;
+      state.p1RespawnTimer = 0;
+      player.x = state.width / 2 - player.w / 2;
+      player.y = state.height - player.h - 60;
+      addDamageNumber(player.x + player.w / 2, player.y, "P1 RESPAWNED!", false);
+      addExplosion(player.x + player.w / 2, player.y + player.h / 2, "#00ff9a", 15);
+    }
+  }
+  
+  // Update P2 respawn timer
+  if (state.p2RespawnTimer > 0) {
+    state.p2RespawnTimer -= delta;
+    if (state.p2RespawnTimer <= 0) {
+      // Respawn P2
+      player2.lives = 1;
+      player2.active = true;
+      player2.invincibleTimer = 2; // Give them invincibility on respawn
+      state.p2RespawnTimer = 0;
+      player2.x = state.width / 2 - player2.w / 2 + 60;
+      player2.y = state.height - player2.h - 60;
+      addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 RESPAWNED!", false);
+      addExplosion(player2.x + player2.w / 2, player2.y + player2.h / 2, "#ff6a6a", 15);
+    }
+  }
+}
+
 function gameOver() {
   state.running = false;
   overlay.classList.remove("hidden");
@@ -918,6 +982,9 @@ function reset() {
   state.killsThisLevel = 0;
   state.damageTakenThisLevel = 0;
   state.currentWeapon = 1;
+  state.p1RespawnTimer = 0;
+  state.p2RespawnTimer = 0;
+  state.p1Dead = false;
   
   overlay.classList.add("hidden");
   if (resumeBtn) resumeBtn.classList.add("hidden");
@@ -1980,9 +2047,15 @@ function updateParticles(delta) {
 // COLLISION DETECTION
 // ============================================================================
 function checkCollisions() {
-  // Player vs enemies
+  // Player vs enemies (skip if P1 is dead in multiplayer)
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
+    
+    // Skip P1 collision if dead
+    if (state.p1Dead) {
+      checkBulletHits(enemy, i);
+      continue;
+    }
     
     if (rectsOverlap(player, enemy)) {
       if (state.shield > 0) {
@@ -2006,7 +2079,10 @@ function checkCollisions() {
         triggerSlowMo(0.3, 0.3);
         playExplosion();
         updateHud();
-        if (state.lives <= 0) gameOver();
+        if (state.lives <= 0) {
+          state.p1Dead = true;
+          checkGameOver();
+        }
       }
       continue;
     }
@@ -2015,29 +2091,34 @@ function checkCollisions() {
     checkBulletHits(enemy, i);
   }
   
-  // Player vs enemy bullets
-  for (let i = enemyBullets.length - 1; i >= 0; i--) {
-    if (rectsOverlap(player, enemyBullets[i])) {
-      const b = enemyBullets[i];
-      enemyBullets.splice(i, 1);
-      addExplosion(b.x, b.y, b.color || "#ff2255", 8);
-      if (state.shield > 0) {
-        state.shield = 0;
-        addDamageNumber(player.x + player.w / 2, player.y, "BLOCKED!");
-        screenShake(0.1, 5);
-        triggerFlash("#00e5ff", 0.05);
-      } else {
-        state.lives--;
-        state.damageTakenThisLevel++;
-        state.combo = 0;
-        addDamageNumber(player.x + player.w / 2, player.y - 20, "-1 LIFE", true);
-        screenShake(0.3, 15);
-        triggerFlash("#ff2255", 0.15);
-        triggerSlowMo(0.2, 0.4);
-        playExplosion();
-        if (state.lives <= 0) gameOver();
+  // Player vs enemy bullets (skip if P1 is dead in multiplayer)
+  if (!state.p1Dead) {
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+      if (rectsOverlap(player, enemyBullets[i])) {
+        const b = enemyBullets[i];
+        enemyBullets.splice(i, 1);
+        addExplosion(b.x, b.y, b.color || "#ff2255", 8);
+        if (state.shield > 0) {
+          state.shield = 0;
+          addDamageNumber(player.x + player.w / 2, player.y, "BLOCKED!");
+          screenShake(0.1, 5);
+          triggerFlash("#00e5ff", 0.05);
+        } else {
+          state.lives--;
+          state.damageTakenThisLevel++;
+          state.combo = 0;
+          addDamageNumber(player.x + player.w / 2, player.y - 20, "-1 LIFE", true);
+          screenShake(0.3, 15);
+          triggerFlash("#ff2255", 0.15);
+          triggerSlowMo(0.2, 0.4);
+          playExplosion();
+          if (state.lives <= 0) {
+            state.p1Dead = true;
+            checkGameOver();
+          }
+        }
+        updateHud();
       }
-      updateHud();
     }
   }
   
@@ -2080,6 +2161,7 @@ function checkCollisions() {
         if (player2.lives <= 0) {
           player2.active = false;
           addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 DOWN!", true);
+          checkGameOver();
         }
         updateHud();
         break; // Only take one hit per frame
@@ -2101,6 +2183,7 @@ function checkCollisions() {
           if (player2.lives <= 0) {
             player2.active = false;
             addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 DOWN!", true);
+            checkGameOver();
           }
           updateHud();
           break; // Only take one hit per frame
@@ -2329,6 +2412,21 @@ function drawRain() {
 }
 
 function drawPlayer() {
+  // Don't draw if P1 is dead in multiplayer (waiting for respawn)
+  if (state.p1Dead && state.multiplayer) {
+    // Draw respawn timer indicator
+    if (state.p1RespawnTimer > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.font = "bold 16px Consolas";
+      ctx.fillStyle = "#00ff9a";
+      ctx.textAlign = "center";
+      ctx.fillText(`P1 Respawn: ${Math.ceil(state.p1RespawnTimer)}s`, state.width / 2, state.height - 30);
+      ctx.restore();
+    }
+    return;
+  }
+  
   ctx.save();
   const cx = player.x + player.w / 2;
   const cy = player.y + player.h / 2;
@@ -2407,6 +2505,20 @@ function drawAlly() {
 }
 
 function drawPlayer2() {
+  // Show respawn timer if P2 is dead
+  if (!player2.active && state.multiplayer) {
+    if (state.p2RespawnTimer > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.font = "bold 16px Consolas";
+      ctx.fillStyle = "#ff6a6a";
+      ctx.textAlign = "center";
+      ctx.fillText(`P2 Respawn: ${Math.ceil(state.p2RespawnTimer)}s`, state.width / 2, state.height - 50);
+      ctx.restore();
+    }
+    return;
+  }
+  
   if (!player2.active) return;
   
   // Blinking effect when invincible
@@ -2732,6 +2844,7 @@ function tick(timestamp) {
     updateParticles(delta);
     updateSpawns(delta);
     updateEffects(slowMoActive ? delta / state.slowMoFactor : delta);
+    updateRespawns(delta);
     checkCollisions();
     checkPowerupPickup();
     updateHud();
