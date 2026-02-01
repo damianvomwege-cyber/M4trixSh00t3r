@@ -2943,8 +2943,32 @@ function generateLobbyCode() {
 
 function initPeer(id = null) {
   return new Promise((resolve, reject) => {
-    // Use debug: 2 for more info, 0 for silent
-    const options = { debug: 1 };
+    // ICE servers for better NAT traversal
+    const options = { 
+      debug: 1,
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+          { urls: "stun:stun3.l.google.com:19302" },
+          { urls: "stun:stun4.l.google.com:19302" },
+          { urls: "stun:global.stun.twilio.com:3478" },
+          { urls: "stun:stun.stunprotocol.org:3478" },
+          // Free TURN server (limited but helps)
+          {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject"
+          },
+          {
+            urls: "turn:openrelay.metered.ca:443",
+            username: "openrelayproject",
+            credential: "openrelayproject"
+          }
+        ]
+      }
+    };
     
     console.log("Initializing peer with ID:", id || "random");
     peer = id ? new Peer(id, options) : new Peer(options);
@@ -3327,6 +3351,13 @@ function attemptConnection(hostId) {
     }
     
     console.log("Connection object created, waiting for open...");
+    
+    // Debug: Log ICE connection state
+    if (conn.peerConnection) {
+      conn.peerConnection.oniceconnectionstatechange = () => {
+        console.log("ICE state:", conn.peerConnection.iceConnectionState);
+      };
+    }
     
     conn.on("open", () => {
       console.log("✅ Connection opened to host!");
