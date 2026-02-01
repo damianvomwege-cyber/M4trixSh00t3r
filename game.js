@@ -18,6 +18,9 @@ const aiLivesEl = document.getElementById("ai-lives");
 const overlay = document.getElementById("overlay");
 const overlayTitle = document.getElementById("overlay-title");
 const overlaySubtitle = document.getElementById("overlay-subtitle");
+const overlayButtons = document.getElementById("overlay-buttons");
+const restartBtn = document.getElementById("restart-btn");
+const menuBtn = document.getElementById("menu-btn");
 const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start-btn");
 const multiplayerBtn = document.getElementById("multiplayer-btn");
@@ -833,13 +836,17 @@ function togglePause() {
   overlay.classList.toggle("hidden", !state.paused);
   overlayTitle.textContent = state.paused ? "Paused" : "";
   overlaySubtitle.textContent = state.paused ? "Press P to continue" : "";
+  // Hide game over buttons when pausing (not game over)
+  if (overlayButtons) overlayButtons.classList.add("hidden");
 }
 
 function gameOver() {
   state.running = false;
   overlay.classList.remove("hidden");
   overlayTitle.textContent = "Game Over";
-  overlaySubtitle.textContent = `Score: ${state.score} | Press R to restart`;
+  overlaySubtitle.textContent = `Score: ${state.score}`;
+  // Show buttons for mobile users
+  if (overlayButtons) overlayButtons.classList.remove("hidden");
   playGameOver();
   stopBgm();
   saveHighscore();
@@ -903,6 +910,7 @@ function reset() {
   state.currentWeapon = 1;
   
   overlay.classList.add("hidden");
+  if (overlayButtons) overlayButtons.classList.add("hidden");
   bullets.length = 0;
   allyBullets.length = 0;
   enemyBullets.length = 0;
@@ -3463,6 +3471,19 @@ storyNext?.addEventListener("click", () => nextStoryScene());
 storySkip?.addEventListener("click", () => endStory());
 levelShop?.addEventListener("click", () => { levelComplete.classList.add("hidden"); openShop(); });
 levelContinue?.addEventListener("click", () => continueFromLevelComplete());
+
+// Game Over buttons
+restartBtn?.addEventListener("click", () => {
+  overlay.classList.add("hidden");
+  if (overlayButtons) overlayButtons.classList.add("hidden");
+  reset();
+});
+
+menuBtn?.addEventListener("click", () => {
+  overlay.classList.add("hidden");
+  if (overlayButtons) overlayButtons.classList.add("hidden");
+  openMenu();
+});
 
 // ============================================================================
 // INIT
