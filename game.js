@@ -1107,6 +1107,7 @@ function startGame() {
   if (adminFloatingBtn) adminFloatingBtn.classList.remove("hidden");
   canvas.classList.add("playing"); // Enable custom crosshair
   reset();
+
   initAudio();
   hideConnectionStatus();
   // Check for story
@@ -1837,8 +1838,8 @@ function updatePlayer2(delta) {
     player2.x = Math.max(0, Math.min(state.width - player2.w, player2.x));
     player2.y = Math.max(60, Math.min(state.height - player2.h - 20, player2.y));
 
-    // Guest shoots with Space
-    if (keys.has("Space") || keys.has("fire")) player2Shoot();
+    // Guest shoots with Space or mouse click
+    if (keys.has("Space") || keys.has("fire") || mouse.down) player2Shoot();
     player2.cooldown = Math.max(0, player2.cooldown - delta);
     return;
   }
@@ -1866,34 +1867,45 @@ function updatePlayer2(delta) {
 function player2Shoot() {
   if (!player2.active || player2.cooldown > 0) return;
   
-  // In online mode, guest sends bullet to host
+  const cx = player2.x + player2.w / 2;
+  const cy = player2.y;
+  
+  // Calculate mouse angle for P2
+  const dx = mouse.x - cx;
+  const dy = mouse.y - cy;
+  const mouseAngle = Math.atan2(dy, dx);
+  
+  // In online mode, guest sends bullet to host with angle
   if (state.onlineMultiplayer && netState.connected && !netState.isHost) {
     sendNetworkData("bullet_fired", {
-      x: player2.x + player2.w / 2 - 3,
-      y: player2.y - 6,
+      x: cx - 3,
+      y: cy - 6,
       weapon: p2CurrentWeapon,
+      angle: mouseAngle,
     });
   }
   
   const weapon = WEAPONS.find(w => w.id === p2CurrentWeapon) || WEAPONS[0];
-  const cx = player2.x + player2.w / 2;
-  const cy = player2.y;
   
-  // Different shooting based on weapon type
+  // Different shooting based on weapon type - all with mouse aiming
   switch (weapon.id) {
     case 1: // Blaster
       p2Bullets.push({
         x: cx - 3, y: cy - 6, w: 6, h: 12,
         speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
-        color: "#ff6a6a",
+        color: "#ff6a6a", angle: mouseAngle, directional: true,
       });
       playShoot();
       break;
     case 2: // Laser
+      const dist = 2000;
+      const endX = cx + Math.cos(mouseAngle) * dist;
+      const endY = cy + Math.sin(mouseAngle) * dist;
       lasers.push({
-        x: cx - 2, y: 0, w: 4, h: cy,
+        x1: cx, y1: cy, x2: endX, y2: endY, w: 4,
         damage: weapon.damage * state.damageMultiplier,
         color: "#ff6a6a", life: 0.1, pierce: true,
+        angle: mouseAngle, directional: true,
       });
       playLaser();
       break;
@@ -1902,6 +1914,7 @@ function player2Shoot() {
         x: cx - 6, y: cy - 10, w: 12, h: 16,
         speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
         color: "#ff6a6a", explosionRadius: 60,
+        angle: mouseAngle, directional: true,
       });
       playRocket();
       break;
@@ -1909,18 +1922,18 @@ function player2Shoot() {
       homingMissiles.push({
         x: cx - 4, y: cy - 8, w: 8, h: 12,
         speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
-        color: "#ff6a6a", target: null, angle: -Math.PI / 2,
+        color: "#ff6a6a", target: null, angle: mouseAngle, directional: true,
       });
       playShoot();
       break;
     case 5: // Shotgun
       for (let i = 0; i < 7; i++) {
-        const angle = -0.25 + (0.5 / 6) * i;
+        const angleOffset = -0.25 + (0.5 / 6) * i;
         p2Bullets.push({
           x: cx - 3, y: cy - 6, w: 5, h: 8,
           speed: weapon.speed + (Math.random() - 0.5) * 100,
           damage: weapon.damage * state.damageMultiplier,
-          color: "#ff6a6a", angle: angle,
+          color: "#ff6a6a", angle: mouseAngle + angleOffset, directional: true,
         });
       }
       playShotgun();
@@ -1929,7 +1942,7 @@ function player2Shoot() {
       p2Bullets.push({
         x: cx - 2 + (Math.random() - 0.5) * 8, y: cy - 6, w: 4, h: 8,
         speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
-        color: "#ff6a6a", angle: (Math.random() - 0.5) * 0.15,
+        color: "#ff6a6a", angle: mouseAngle + (Math.random() - 0.5) * 0.15, directional: true,
       });
       playMinigun();
       break;
@@ -1938,6 +1951,7 @@ function player2Shoot() {
         x: cx - 8, y: cy - 10, w: 16, h: 16,
         speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
         color: "#ff6a6a", isPlasma: true, explosionRadius: 40,
+        angle: mouseAngle, directional: true,
       });
       playPlasma();
       break;
@@ -1946,6 +1960,7 @@ function player2Shoot() {
         x: cx - 3, y: cy - 6, w: 6, h: 10,
         speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
         color: "#ff6a6a", isChain: true, chainCount: 3, hitEnemies: [],
+        angle: mouseAngle, directional: true,
       });
       playChain();
       break;
@@ -1954,6 +1969,7 @@ function player2Shoot() {
         x: cx - 4, y: cy - 8, w: 8, h: 12,
         speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
         color: "#ff8888", isFreeze: true, slowDuration: 3, slowAmount: 0.4,
+        angle: mouseAngle, directional: true,
       });
       playFreeze();
       break;
@@ -1961,6 +1977,7 @@ function player2Shoot() {
       p2Bullets.push({
         x: cx - 3, y: cy - 6, w: 6, h: 12,
         speed: 520, damage: state.damageMultiplier, color: "#ff6a6a",
+        angle: mouseAngle, directional: true,
       });
       playShoot();
   }
@@ -2058,8 +2075,24 @@ function updateP2Bullets(delta) {
   for (let i = p2Bullets.length - 1; i >= 0; i--) {
     const b = p2Bullets[i];
     if (Math.random() < 0.3) addTrail(b.x + b.w / 2, b.y + b.h, "#ff6a6a");
-    b.y -= b.speed * delta;
-    if (b.y + b.h < 0) p2Bullets.splice(i, 1);
+    
+    // Handle directional bullets with angle
+    if (b.directional && b.angle !== undefined) {
+      b.x += Math.cos(b.angle) * b.speed * delta;
+      b.y += Math.sin(b.angle) * b.speed * delta;
+    } else if (b.angle !== undefined) {
+      // Old style angle-offset bullets
+      b.y -= b.speed * delta;
+      b.x += Math.sin(b.angle) * b.speed * delta;
+    } else {
+      // Default: straight up
+      b.y -= b.speed * delta;
+    }
+    
+    // Remove if out of bounds
+    if (b.y + b.h < 0 || b.y > state.height || b.x + b.w < 0 || b.x > state.width) {
+      p2Bullets.splice(i, 1);
+    }
   }
 }
 
@@ -3029,14 +3062,20 @@ function drawCrosshair() {
   // Don't draw crosshair if using mobile or in menu
   if (!state.running || state.paused) return;
   
-  const weapon = WEAPONS.find(w => w.id === state.currentWeapon) || WEAPONS[0];
+  // Determine which player we control
+  const isGuest = state.onlineMultiplayer && !netState.isHost;
+  const controlledPlayer = isGuest ? player2 : player;
+  const weaponId = isGuest ? p2CurrentWeapon : state.currentWeapon;
+  const weapon = WEAPONS.find(w => w.id === weaponId) || WEAPONS[0];
+  const playerColor = isGuest ? "#ff6a6a" : "#00ff9a";
+  
   const cx = mouse.x;
   const cy = mouse.y;
   const size = 12;
   
   ctx.save();
-  ctx.strokeStyle = weapon.color || "#00ff9a";
-  ctx.shadowColor = weapon.color || "#00ff9a";
+  ctx.strokeStyle = weapon.color || playerColor;
+  ctx.shadowColor = weapon.color || playerColor;
   ctx.shadowBlur = 10;
   ctx.lineWidth = 2;
   ctx.globalAlpha = 0.8;
@@ -3056,15 +3095,15 @@ function drawCrosshair() {
   // Center dot
   ctx.beginPath();
   ctx.arc(cx, cy, 2, 0, Math.PI * 2);
-  ctx.fillStyle = weapon.color || "#00ff9a";
+  ctx.fillStyle = weapon.color || playerColor;
   ctx.fill();
   
-  // Aiming line from player to crosshair
+  // Aiming line from controlled player to crosshair
   ctx.globalAlpha = 0.2;
   ctx.lineWidth = 1;
   ctx.setLineDash([5, 5]);
   ctx.beginPath();
-  ctx.moveTo(player.x + player.w / 2, player.y);
+  ctx.moveTo(controlledPlayer.x + controlledPlayer.w / 2, controlledPlayer.y);
   ctx.lineTo(cx, cy);
   ctx.stroke();
   ctx.setLineDash([]);
@@ -3143,11 +3182,50 @@ function drawPlayer2() {
 }
 
 function drawP2Bullets() {
-  ctx.fillStyle = "#ff6a6a";
-  ctx.shadowColor = "#ff6a6a";
-  ctx.shadowBlur = 8;
   for (const b of p2Bullets) {
-    ctx.fillRect(b.x, b.y, b.w, b.h);
+    const color = b.color || "#ff6a6a";
+    ctx.fillStyle = color;
+    ctx.shadowColor = color;
+    
+    if (b.isPlasma) {
+      // Large glowing plasma ball
+      ctx.shadowBlur = 25;
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w / 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (b.isChain) {
+      // Chain lightning bullet
+      ctx.shadowBlur = 15;
+      ctx.fillStyle = "#66ddff";
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (b.isFreeze) {
+      // Freeze bullet with snowflake effect
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = "#88ccff";
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (b.directional && b.angle !== undefined) {
+      // Draw rotated bullet
+      ctx.save();
+      ctx.shadowBlur = 8;
+      ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+      ctx.rotate(b.angle + Math.PI / 2);
+      ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+      ctx.restore();
+    } else {
+      // Default bullet
+      ctx.shadowBlur = 8;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    }
   }
   ctx.shadowBlur = 0;
 }
