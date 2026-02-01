@@ -756,10 +756,115 @@ canvas#game {
   flex-wrap: wrap;
 }
 
+/* Admin Quick Powerup Buttons */
+.admin-powerup-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.btn-powerup {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  min-width: 80px;
+}
+
+.btn-powerup.rapid {
+  background: rgba(0, 255, 154, 0.2);
+  border-color: var(--matrix-green);
+  color: var(--matrix-green);
+}
+
+.btn-powerup.rapid:hover {
+  background: rgba(0, 255, 154, 0.4);
+  box-shadow: 0 0 15px var(--matrix-green);
+}
+
+.btn-powerup.shield {
+  background: rgba(0, 229, 255, 0.2);
+  border-color: var(--matrix-cyan);
+  color: var(--matrix-cyan);
+}
+
+.btn-powerup.shield:hover {
+  background: rgba(0, 229, 255, 0.4);
+  box-shadow: 0 0 15px var(--matrix-cyan);
+}
+
+.btn-powerup.speed {
+  background: rgba(255, 204, 0, 0.2);
+  border-color: var(--matrix-orange);
+  color: var(--matrix-orange);
+}
+
+.btn-powerup.speed:hover {
+  background: rgba(255, 204, 0, 0.4);
+  box-shadow: 0 0 15px var(--matrix-orange);
+}
+
+.btn-powerup.spread {
+  background: rgba(176, 0, 255, 0.2);
+  border-color: var(--matrix-purple);
+  color: var(--matrix-purple);
+}
+
+.btn-powerup.spread:hover {
+  background: rgba(176, 0, 255, 0.4);
+  box-shadow: 0 0 15px var(--matrix-purple);
+}
+
+.btn-powerup.life {
+  background: rgba(255, 68, 136, 0.2);
+  border-color: #ff4488;
+  color: #ff4488;
+}
+
+.btn-powerup.life:hover {
+  background: rgba(255, 68, 136, 0.4);
+  box-shadow: 0 0 15px #ff4488;
+}
+
+.btn-powerup.nuke {
+  background: rgba(255, 0, 255, 0.2);
+  border-color: #ff00ff;
+  color: #ff00ff;
+}
+
+.btn-powerup.nuke:hover {
+  background: rgba(255, 0, 255, 0.4);
+  box-shadow: 0 0 15px #ff00ff;
+}
+
+.btn-powerup.all {
+  background: linear-gradient(135deg, rgba(0, 255, 154, 0.3), rgba(176, 0, 255, 0.3));
+  border-color: #fff;
+  color: #fff;
+}
+
+.btn-powerup.all:hover {
+  background: linear-gradient(135deg, rgba(0, 255, 154, 0.5), rgba(176, 0, 255, 0.5));
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
 /* Responsive */
 @media (max-width: 600px) {
   .admin-grid {
     grid-template-columns: 1fr;
+  }
+  
+  .admin-powerup-buttons {
+    gap: 6px;
+  }
+  
+  .btn-powerup {
+    min-width: 70px;
+    padding: 6px 10px;
+    font-size: 10px;
   }
   .shop-grid {
     grid-template-columns: 1fr 1fr;

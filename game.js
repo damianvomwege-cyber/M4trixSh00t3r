@@ -5076,6 +5076,66 @@ document.getElementById("admin-unlock-all")?.addEventListener("click", adminUnlo
 document.getElementById("admin-add-credits")?.addEventListener("click", adminAddCredits);
 document.getElementById("admin-next-level")?.addEventListener("click", adminNextLevel);
 
+// Admin Quick Powerup Buttons
+document.getElementById("admin-give-rapid")?.addEventListener("click", () => {
+  state.rapid = Math.min(120, state.rapid + 60);
+  state.rapidLevel = Math.min(20, state.rapidLevel + 5);
+  addDamageNumber(player.x + player.w / 2, player.y, "⚡ RAPID +5!", false);
+  playPickup();
+  updateHud();
+});
+
+document.getElementById("admin-give-shield")?.addEventListener("click", () => {
+  state.shield = Math.min(120, state.shield + 60);
+  addDamageNumber(player.x + player.w / 2, player.y, "🛡️ SHIELD!", false);
+  playPickup();
+  updateHud();
+});
+
+document.getElementById("admin-give-speed")?.addEventListener("click", () => {
+  state.speed = Math.min(120, state.speed + 60);
+  addDamageNumber(player.x + player.w / 2, player.y, "💨 SPEED!", false);
+  playPickup();
+  updateHud();
+});
+
+document.getElementById("admin-give-spread")?.addEventListener("click", () => {
+  state.spread = Math.min(120, state.spread + 60);
+  addDamageNumber(player.x + player.w / 2, player.y, "🔥 SPREAD!", false);
+  playPickup();
+  updateHud();
+});
+
+document.getElementById("admin-give-life")?.addEventListener("click", () => {
+  state.lives++;
+  addDamageNumber(player.x + player.w / 2, player.y, "❤️ +1 LIFE!", false);
+  playPickup();
+  updateHud();
+});
+
+document.getElementById("admin-give-nuke")?.addEventListener("click", () => {
+  state.nukeCooldown = 0;
+  state.nukeReady = true;
+  addDamageNumber(player.x + player.w / 2, player.y, "☢️ NUKE READY!", false);
+  playPickup();
+  updateHud();
+});
+
+document.getElementById("admin-give-all")?.addEventListener("click", () => {
+  state.rapid = 120;
+  state.rapidLevel = 20;
+  state.shield = 120;
+  state.speed = 120;
+  state.spread = 120;
+  state.lives += 5;
+  state.nukeCooldown = 0;
+  state.nukeReady = true;
+  addDamageNumber(player.x + player.w / 2, player.y, "🌟 ALL POWERUPS MAX!", false);
+  addExplosion(player.x + player.w / 2, player.y + player.h / 2, "#ffffff", 30);
+  playPickup();
+  updateHud();
+});
+
 shopClose?.addEventListener("click", () => closeShop());
 achievementsClose?.addEventListener("click", () => achievementsPanel.classList.add("hidden"));
 highscoreClose?.addEventListener("click", () => highscoresPanel.classList.add("hidden"));
