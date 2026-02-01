@@ -2943,47 +2943,71 @@ function generateLobbyCode() {
 
 function initPeer(id = null) {
   return new Promise((resolve, reject) => {
-    const options = { debug: 0 };
+    // Use debug: 2 for more info, 0 for silent
+    const options = { debug: 1 };
+    
+    console.log("Initializing peer with ID:", id || "random");
     peer = id ? new Peer(id, options) : new Peer(options);
     
     peer.on("open", (peerId) => {
-      console.log("Peer connected with ID:", peerId);
+      console.log("✅ Peer connected with ID:", peerId);
       resolve(peerId);
     });
     
     peer.on("error", (err) => {
-      console.error("Peer error:", err);
+      console.error("❌ Peer error:", err.type, err.message);
       if (err.type === "unavailable-id") {
-        reject(new Error("Code already in use"));
+        reject(new Error("Code bereits in Benutzung"));
       } else if (err.type === "peer-unavailable") {
-        reject(new Error("Lobby not found"));
+        reject(new Error("Lobby nicht gefunden"));
+      } else if (err.type === "network") {
+        reject(new Error("Netzwerk-Fehler"));
+      } else if (err.type === "server-error") {
+        reject(new Error("Server nicht erreichbar"));
       } else {
         reject(err);
       }
     });
     
+    peer.on("disconnected", () => {
+      console.log("⚠️ Peer disconnected from signaling server");
+    });
+    
     peer.on("connection", (conn) => {
+      console.log("📥 Incoming connection from:", conn.peer);
       handleConnection(conn);
     });
   });
 }
 
 function handleConnection(conn) {
+  console.log("handleConnection called, isHost:", netState.isHost);
   peerConnection = conn;
   
+  // For host receiving a connection, it opens automatically
+  if (netState.isHost) {
+    console.log("Host received connection from guest");
+    netState.connected = true;
+    netState.guestConnected = true;
+    lobbyGuest.textContent = "👤 Spieler verbunden!";
+    lobbyGuest.classList.remove("waiting");
+    lobbyGuest.classList.add("connected");
+    lobbyStartGame.disabled = false;
+    showConnectionStatus("🔗 Spieler verbunden!", "connected");
+  }
+  
   conn.on("open", () => {
-    console.log("Connection opened");
+    console.log("Connection opened event");
     netState.connected = true;
     
-    if (netState.isHost) {
+    if (netState.isHost && !netState.guestConnected) {
       netState.guestConnected = true;
-      lobbyGuest.textContent = "👤 Guest Connected!";
+      lobbyGuest.textContent = "👤 Spieler verbunden!";
       lobbyGuest.classList.remove("waiting");
       lobbyGuest.classList.add("connected");
       lobbyStartGame.disabled = false;
+      showConnectionStatus("🔗 Spieler verbunden!", "connected");
     }
-    
-    showConnectionStatus("🔗 Connected", "connected");
   });
   
   conn.on("data", (data) => {
@@ -3185,20 +3209,37 @@ function createLobby() {
   
   lobbyMenu.classList.add("hidden");
   lobbyHost.classList.remove("hidden");
-  lobbyCodeEl.textContent = netState.lobbyCode;
-  lobbyGuest.textContent = "⏳ Waiting for player...";
+  lobbyCodeEl.textContent = "...";
+  lobbyGuest.textContent = "⏳ Warte auf Spieler...";
   lobbyGuest.classList.add("waiting");
   lobbyGuest.classList.remove("connected");
   lobbyStartGame.disabled = true;
   
   // Reinitialize peer with lobby code as ID
-  if (peer) peer.destroy();
+  if (peer) {
+    peer.destroy();
+    peer = null;
+  }
   
-  initPeer("M4TRIX_" + netState.lobbyCode).then(() => {
-    console.log("Lobby created:", netState.lobbyCode);
+  const peerId = "M4TRIX_" + netState.lobbyCode;
+  console.log("Creating lobby with peer ID:", peerId);
+  
+  initPeer(peerId).then(() => {
+    console.log("Lobby created successfully:", netState.lobbyCode);
+    lobbyCodeEl.textContent = netState.lobbyCode;
   }).catch(err => {
-    lobbyCodeEl.textContent = "ERROR";
     console.error("Failed to create lobby:", err);
+    // Try with a new code
+    netState.lobbyCode = generateLobbyCode();
+    const newPeerId = "M4TRIX_" + netState.lobbyCode;
+    console.log("Retrying with new code:", newPeerId);
+    
+    initPeer(newPeerId).then(() => {
+      lobbyCodeEl.textContent = netState.lobbyCode;
+    }).catch(err2 => {
+      lobbyCodeEl.textContent = "FEHLER";
+      console.error("Failed again:", err2);
+    });
   });
 }
 
@@ -3213,6 +3254,7 @@ function joinLobby() {
   const code = lobbyCodeInput.value.toUpperCase().trim();
   if (code.length !== 6) {
     lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+    showJoinError("Code muss 6 Zeichen haben!");
     return;
   }
   
@@ -3220,34 +3262,85 @@ function joinLobby() {
   netState.isHost = false;
   netState.lobbyCode = code;
   
+  // Show connecting status
+  lobbyJoinForm.classList.add("hidden");
+  lobbyStatus.textContent = "🔗 Verbinde zu Lobby " + code + "...";
+  lobbyStatus.classList.remove("hidden");
+  
   // Connect to host
   const hostId = "M4TRIX_" + code;
+  console.log("Attempting to connect to:", hostId);
   
+  // Check if peer is ready
+  if (!peer || peer.disconnected) {
+    console.log("Peer not ready, reinitializing...");
+    initPeer().then(() => {
+      attemptConnection(hostId);
+    }).catch(err => {
+      showJoinError("Netzwerk-Fehler: " + err.message);
+    });
+  } else {
+    attemptConnection(hostId);
+  }
+}
+
+function attemptConnection(hostId) {
   try {
+    console.log("Connecting to peer:", hostId);
     const conn = peer.connect(hostId, { reliable: true });
     
+    if (!conn) {
+      showJoinError("Verbindung fehlgeschlagen!");
+      return;
+    }
+    
     conn.on("open", () => {
-      handleConnection(conn);
-      lobbyJoinForm.classList.add("hidden");
+      console.log("Connection opened to host!");
+      peerConnection = conn;
+      netState.connected = true;
+      
+      conn.on("data", (data) => {
+        handleNetworkData(data);
+      });
+      
+      conn.on("close", () => {
+        console.log("Connection closed");
+        handleDisconnect();
+      });
+      
+      lobbyStatus.classList.add("hidden");
       lobbyWaiting.classList.remove("hidden");
+      showConnectionStatus("🔗 Verbunden!", "connected");
     });
     
     conn.on("error", (err) => {
-      console.error("Join error:", err);
-      lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+      console.error("Connection error:", err);
+      showJoinError("Verbindungsfehler: " + err.type);
     });
     
     // Timeout for connection
     setTimeout(() => {
-      if (!peerConnection) {
-        lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+      if (!netState.connected) {
+        console.log("Connection timeout");
+        showJoinError("Lobby nicht gefunden oder offline!");
       }
-    }, 5000);
+    }, 8000);
     
   } catch (err) {
     console.error("Failed to connect:", err);
-    lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+    showJoinError("Fehler: " + err.message);
   }
+}
+
+function showJoinError(message) {
+  lobbyStatus.textContent = "❌ " + message;
+  lobbyStatus.classList.remove("hidden");
+  lobbyJoinForm.classList.remove("hidden");
+  lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+  
+  setTimeout(() => {
+    lobbyCodeInput.style.borderColor = "";
+  }, 3000);
 }
 
 function startOnlineGame() {
