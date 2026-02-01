@@ -3065,7 +3065,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   
-  if (event.code === "KeyM") {
+  if (event.code === "KeyM" && !event.repeat) {
     if (!state.inMenu) openMenu();
     return;
   }
@@ -3092,7 +3092,7 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   
-  if (event.code === "KeyI") {
+  if (event.code === "KeyI" && !event.repeat) {
     if (state.level >= state.aiUnlockLevel) {
       state.aiEnabled = !state.aiEnabled;
       ally.active = state.aiEnabled;
@@ -3103,18 +3103,18 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   
-  // Q = Nuke (Ultimate ability)
-  if (event.code === "KeyQ") {
+  // Q = Nuke (Ultimate ability) - only trigger once, not on repeat
+  if (event.code === "KeyQ" && !event.repeat) {
     activateNuke();
     return;
   }
   
-  if (event.code === "KeyP") {
+  if (event.code === "KeyP" && !event.repeat) {
     togglePause();
     return;
   }
   
-  if (event.code === "KeyR") {
+  if (event.code === "KeyR" && !event.repeat) {
     reset();
     return;
   }
