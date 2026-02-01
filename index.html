@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+    <title>M4trix Sh00t3r</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="hud">
+      <div class="title">M4trix Sh00t3r</div>
+      <div class="stats">
+        <span id="score">Score: 0</span>
+        <span id="combo">Combo: x1</span>
+        <span id="lives">Lives: 3</span>
+        <span id="level">Level: 1</span>
+        <span id="weapon">Weapon: Blaster</span>
+        <span id="buffs">Powerups: -</span>
+        <span id="ai">AI: Off</span>
+        <span id="ai-lives">AI Lives: -</span>
+      </div>
+      <div class="help">
+        Move: WASD • Shoot: Space • Weapons: 1-4 • Pause: P • Shop: B • AI: I
+      </div>
+    </div>
+    <div id="boss-hp-bar" class="boss-hp hidden">
+      <div class="boss-hp-label">BOSS</div>
+      <div class="boss-hp-track"><div id="boss-hp-fill" class="boss-hp-fill"></div></div>
+      <div id="boss-phase" class="boss-phase">Phase 1</div>
+    </div>
+    <canvas id="game"></canvas>
+
+    <!-- Touch Controls -->
+    <div id="touch-controls" class="touch-controls">
+      <div id="touch-left" class="touch-btn touch-left">◀</div>
+      <div id="touch-right" class="touch-btn touch-right">▶</div>
+      <div id="touch-up" class="touch-btn touch-up">▲</div>
+      <div id="touch-down" class="touch-btn touch-down">▼</div>
+      <div id="touch-fire" class="touch-btn touch-fire">🔥</div>
+      <div id="touch-weapon" class="touch-btn touch-weapon">⚔</div>
+    </div>
+
+    <!-- Main Menu -->
+    <div id="menu" class="overlay">
+      <div class="panel menu-panel">
+        <div class="panel-title glitch" data-text="M4TRIX SH00T3R">M4TRIX SH00T3R</div>
+        <div class="panel-text">
+          A cyberpunk shooter experience.<br/>
+          Survive the digital storm.
+        </div>
+        <div class="menu-buttons">
+          <button id="start-btn" class="btn btn-large">► START GAME</button>
+          <button id="story-btn" class="btn">📖 STORY MODE</button>
+          <button id="achievements-btn" class="btn">🏆 ACHIEVEMENTS</button>
+          <button id="highscore-btn" class="btn">📊 HIGHSCORES</button>
+          <button id="admin-btn" class="btn">⚙ ADMIN PANEL</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Story/Cutscene Overlay -->
+    <div id="story" class="overlay hidden">
+      <div class="panel story-panel">
+        <div id="story-title" class="story-title">CHAPTER 1</div>
+        <div id="story-text" class="story-text typewriter"></div>
+        <div id="story-speaker" class="story-speaker"></div>
+        <button id="story-next" class="btn">CONTINUE ►</button>
+        <button id="story-skip" class="btn btn-small">SKIP</button>
+      </div>
+    </div>
+
+    <!-- Upgrade Shop -->
+    <div id="shop" class="overlay hidden">
+      <div class="panel shop-panel">
+        <div class="panel-title">⚡ UPGRADE SHOP ⚡</div>
+        <div id="shop-credits" class="shop-credits">Credits: 0</div>
+        <div class="shop-grid" id="shop-grid"></div>
+        <div class="admin-actions">
+          <button id="shop-close" class="btn">CONTINUE ►</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Achievements -->
+    <div id="achievements" class="overlay hidden">
+      <div class="panel achievements-panel">
+        <div class="panel-title">🏆 ACHIEVEMENTS</div>
+        <div id="achievements-list" class="achievements-list"></div>
+        <div class="admin-actions">
+          <button id="achievements-close" class="btn">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Highscores -->
+    <div id="highscores" class="overlay hidden">
+      <div class="panel">
+        <div class="panel-title">📊 HIGHSCORES</div>
+        <div id="highscore-list" class="highscore-list"></div>
+        <div class="admin-actions">
+          <button id="highscore-close" class="btn">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Level Complete -->
+    <div id="level-complete" class="overlay hidden">
+      <div class="panel">
+        <div class="panel-title">LEVEL COMPLETE!</div>
+        <div id="level-stats" class="level-stats"></div>
+        <div class="admin-actions">
+          <button id="level-shop" class="btn btn-large">OPEN SHOP</button>
+          <button id="level-continue" class="btn">CONTINUE ►</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Admin Panel -->
+    <div id="admin" class="overlay hidden">
+      <div class="panel admin-panel">
+        <div class="panel-title">Admin Panel</div>
+        <div class="panel-text">Adjust gameplay and audio settings.</div>
+        <div class="admin-grid">
+          <label>Level <input id="admin-level" type="number" min="1" value="1" /></label>
+          <label>Lives <input id="admin-lives" type="number" min="0" value="3" /></label>
+          <label>Score <input id="admin-score" type="number" min="0" value="0" /></label>
+          <label>Credits <input id="admin-credits" type="number" min="0" value="0" /></label>
+          <label>Spawn Interval (s) <input id="admin-spawn" type="number" step="0.1" min="0.2" value="1.2" /></label>
+          <label>AI Unlock Level <input id="admin-aiunlock" type="number" min="1" value="2" /></label>
+          <label>AI Lives <input id="admin-ailives" type="number" min="0" value="3" /></label>
+          <label>AI Enabled <input id="admin-ai" type="checkbox" /></label>
+          <label>Weapon (1-4) <input id="admin-weapon" type="number" min="1" max="4" value="1" /></label>
+          <label>Rapid Level <input id="admin-rapidlevel" type="number" min="0" value="0" /></label>
+          <label>Rapid Time (s) <input id="admin-rapidtime" type="number" min="0" value="0" /></label>
+          <label>Shield Time (s) <input id="admin-shieldtime" type="number" min="0" value="0" /></label>
+          <label>Speed Time (s) <input id="admin-speedtime" type="number" min="0" value="0" /></label>
+          <label>Spread Time (s) <input id="admin-spreadtime" type="number" min="0" value="0" /></label>
+          <label>SFX Volume <input id="admin-sfx" type="number" step="0.05" min="0" max="1" value="1" /></label>
+          <label>BGM Volume <input id="admin-bgm" type="number" step="0.05" min="0" max="1" value="1" /></label>
+          <label>Life % <input id="admin-life" type="number" min="0" max="100" value="20" /></label>
+          <label>Speed % <input id="admin-speed" type="number" min="0" max="100" value="10" /></label>
+          <label>Rapid % <input id="admin-rapid" type="number" min="0" max="100" value="60" /></label>
+          <label>Shield % <input id="admin-shield" type="number" min="0" max="100" value="10" /></label>
+          <label>Spread % <input id="admin-spread" type="number" min="0" max="100" value="0" /></label>
+        </div>
+        <div class="admin-actions">
+          <button id="admin-apply" class="btn">Apply</button>
+          <button id="admin-close" class="btn">Close</button>
+          <button id="admin-reset" class="btn" style="background:#ff2255;">Reset Progress</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pause/Game Over -->
+    <div id="overlay" class="overlay hidden">
+      <div class="panel">
+        <div id="overlay-title">Paused</div>
+        <div id="overlay-subtitle">Press P to continue</div>
+      </div>
+    </div>
+
+    <!-- Achievement Popup -->
+    <div id="achievement-popup" class="achievement-popup hidden">
+      <div class="achievement-icon">🏆</div>
+      <div class="achievement-info">
+        <div id="achievement-name" class="achievement-name"></div>
+        <div id="achievement-desc" class="achievement-desc"></div>
+      </div>
+    </div>
+
+    <script src="game.js"></script>
+  </body>
+</html>
