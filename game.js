@@ -324,6 +324,7 @@ const config = {
   aiUnlockLevel: 2,
   aiEnabled: false,
   aiLives: 3,
+  aiCount: 1, // Number of AI helpers (admin only)
   rapidLevel: 0,
   rapidTime: 0,
   shieldTime: 0,
@@ -331,18 +332,35 @@ const config = {
   spreadTime: 0,
 };
 
-const ally = {
-  x: 0,
-  y: 0,
-  w: 22,
-  h: 22,
-  speed: 220,
-  baseCooldown: 0.22,
-  cooldown: 0,
-  color: "#6de2ff",
-  active: false,
-  lives: 3,
-};
+// Multiple AI allies support
+const allies = [];
+const allyColors = ["#6de2ff", "#ff6aff", "#6aff6a", "#ffff6a", "#ff6a6a", "#6affff", "#ff9a6a", "#9a6aff", "#6aff9a", "#ff6a9a"];
+
+function createAlly(index = 0) {
+  return {
+    x: 100 + (index * 60),
+    y: state.height - 100,
+    w: 22,
+    h: 22,
+    speed: 220,
+    baseCooldown: 0.22,
+    cooldown: 0,
+    color: allyColors[index % allyColors.length],
+    active: true,
+    lives: 3,
+    index: index
+  };
+}
+
+function initAllies(count = 1) {
+  allies.length = 0;
+  for (let i = 0; i < count; i++) {
+    allies.push(createAlly(i));
+  }
+}
+
+// For backwards compatibility
+const ally = { active: false, lives: 0 };
 
 // Player 2 for local multiplayer
 const player2 = {
@@ -430,9 +448,11 @@ function updateHud() {
   if (state.level < state.aiUnlockLevel) {
     aiEl.textContent = "AI: Locked";
   } else {
-    aiEl.textContent = `AI: ${state.aiEnabled ? "On" : "Off"}`;
+    const activeAllies = allies.filter(a => a.active).length;
+    aiEl.textContent = `AI: ${state.aiEnabled ? `On (${activeAllies})` : "Off"}`;
   }
-  aiLivesEl.textContent = `AI Lives: ${ally.active ? ally.lives : "-"}`;
+  const totalAllyLives = allies.reduce((sum, a) => sum + (a.active ? a.lives : 0), 0);
+  aiLivesEl.textContent = `AI Lives: ${state.aiEnabled && allies.some(a => a.active) ? totalAllyLives : "-"}`;
   
   // Boss HP bar
   if (state.bossActive && state.currentBoss) {
@@ -1049,8 +1069,14 @@ function reset() {
   rockets.length = 0;
   homingMissiles.length = 0;
   
-  ally.active = config.aiEnabled;
-  ally.lives = config.aiLives;
+  // Initialize allies based on config
+  const allyCount = config.aiCount || 1;
+  initAllies(allyCount);
+  allies.forEach(a => {
+    a.active = config.aiEnabled;
+    a.lives = config.aiLives;
+  });
+  
   player.x = state.width / 2 - player.w / 2;
   player.y = state.height - player.h - 60;
   
@@ -1067,7 +1093,7 @@ function reset() {
     p2StatsEl.classList.remove("hidden");
     // Disable AI in multiplayer
     state.aiEnabled = false;
-    ally.active = false;
+    allies.forEach(a => a.active = false);
   } else {
     p2StatsEl.classList.add("hidden");
   }
@@ -1422,18 +1448,18 @@ function updateNukeCooldown(delta) {
   }
 }
 
-function allyShoot() {
-  if (!ally.active || ally.cooldown > 0) return;
+function allyShoot(allyUnit) {
+  if (!allyUnit || !allyUnit.active || allyUnit.cooldown > 0) return;
   allyBullets.push({
-    x: ally.x + ally.w / 2 - 3,
-    y: ally.y - 6,
+    x: allyUnit.x + allyUnit.w / 2 - 3,
+    y: allyUnit.y - 6,
     w: 6,
     h: 10,
     speed: 480,
     damage: 1,
-    color: "#6de2ff",
+    color: allyUnit.color,
   });
-  ally.cooldown = ally.baseCooldown;
+  allyUnit.cooldown = allyUnit.baseCooldown;
 }
 
 // ============================================================================
@@ -1746,49 +1772,65 @@ function player2Shoot() {
 
 function updateAlly(delta) {
   if (!state.aiEnabled) {
-    ally.active = false;
+    allies.forEach(a => a.active = false);
     return;
   }
-  if (!ally.active) {
-    ally.active = true;
-    ally.x = Math.min(state.width - ally.w - 20, player.x + 50);
-    ally.y = Math.min(state.height - ally.h - 20, player.y + 40);
-  }
-
-  // Smart AI: avoid enemies, collect powerups, shoot
-  let targetX = player.x;
   
-  // Find nearest enemy to shoot at
-  const target = findNearestEnemy();
-  if (target) {
-    targetX = target.x + target.w / 2 - ally.w / 2;
-  }
-  
-  // Check for powerups
-  const nearbyPowerup = powerups.find(p => Math.abs(p.x - ally.x) < 100 && p.y > ally.y - 100);
-  if (nearbyPowerup) {
-    targetX = nearbyPowerup.x;
-  }
-  
-  // Avoid enemies coming at us
-  for (const enemy of enemies) {
-    const dx = ally.x + ally.w / 2 - (enemy.x + enemy.w / 2);
-    const dy = ally.y + ally.h / 2 - (enemy.y + enemy.h / 2);
-    if (Math.abs(dx) < 60 && dy > 0 && dy < 150) {
-      targetX = ally.x + (dx > 0 ? 80 : -80);
-      break;
+  // Update each ally
+  allies.forEach((allyUnit, index) => {
+    if (!allyUnit.active || allyUnit.lives <= 0) return;
+    
+    // Initialize position if needed
+    if (allyUnit.x === 0 && allyUnit.y === 0) {
+      allyUnit.x = Math.min(state.width - allyUnit.w - 20, player.x + 50 + index * 40);
+      allyUnit.y = Math.min(state.height - allyUnit.h - 20, player.y + 40);
     }
-  }
-  
-  const moveDir = Math.sign(targetX - ally.x);
-  ally.x += moveDir * ally.speed * delta;
-  ally.x = Math.max(0, Math.min(state.width - ally.w, ally.x));
-  
-  const desiredY = Math.min(state.height - ally.h - 40, player.y + 40);
-  ally.y += (desiredY - ally.y) * Math.min(1, delta * 4);
 
-  if (target) allyShoot();
-  ally.cooldown = Math.max(0, ally.cooldown - delta);
+    // Smart AI: avoid enemies, collect powerups, shoot
+    let targetX = player.x + (index - allies.length / 2) * 60; // Spread out around player
+    
+    // Find nearest enemy to shoot at
+    const target = findNearestEnemy();
+    if (target) {
+      targetX = target.x + target.w / 2 - allyUnit.w / 2 + (index * 20 - allies.length * 10);
+    }
+    
+    // Check for powerups
+    const nearbyPowerup = powerups.find(p => Math.abs(p.x - allyUnit.x) < 100 && p.y > allyUnit.y - 100);
+    if (nearbyPowerup) {
+      targetX = nearbyPowerup.x;
+    }
+    
+    // Avoid enemies coming at us
+    for (const enemy of enemies) {
+      const dx = allyUnit.x + allyUnit.w / 2 - (enemy.x + enemy.w / 2);
+      const dy = allyUnit.y + allyUnit.h / 2 - (enemy.y + enemy.h / 2);
+      if (Math.abs(dx) < 60 && dy > 0 && dy < 150) {
+        targetX = allyUnit.x + (dx > 0 ? 80 : -80);
+        break;
+      }
+    }
+    
+    // Avoid other allies
+    allies.forEach((other, otherIndex) => {
+      if (otherIndex !== index && other.active) {
+        const dx = allyUnit.x - other.x;
+        if (Math.abs(dx) < 30) {
+          targetX += dx > 0 ? 20 : -20;
+        }
+      }
+    });
+    
+    const moveDir = Math.sign(targetX - allyUnit.x);
+    allyUnit.x += moveDir * allyUnit.speed * delta;
+    allyUnit.x = Math.max(0, Math.min(state.width - allyUnit.w, allyUnit.x));
+    
+    const desiredY = Math.min(state.height - allyUnit.h - 40 - (index * 10), player.y + 40);
+    allyUnit.y += (desiredY - allyUnit.y) * Math.min(1, delta * 4);
+
+    if (target) allyShoot(allyUnit);
+    allyUnit.cooldown = Math.max(0, allyUnit.cooldown - delta);
+  });
 }
 
 function updateBullets(delta) {
@@ -2279,19 +2321,25 @@ function checkCollisions() {
     }
   }
   
-  // Ally vs enemies
-  if (ally.active) {
+  // Allies vs enemies
+  for (const allyUnit of allies) {
+    if (!allyUnit.active || allyUnit.lives <= 0) continue;
     for (let i = enemies.length - 1; i >= 0; i--) {
       if (enemies[i].type === "boss") continue;
-      if (rectsOverlap(ally, enemies[i])) {
-        ally.lives--;
+      if (rectsOverlap(allyUnit, enemies[i])) {
+        allyUnit.lives--;
         enemies.splice(i, 1);
-        addExplosion(ally.x + ally.w / 2, ally.y + ally.h / 2, "#6de2ff");
-        if (ally.lives <= 0) {
-          ally.active = false;
-          state.aiEnabled = false;
+        addExplosion(allyUnit.x + allyUnit.w / 2, allyUnit.y + allyUnit.h / 2, allyUnit.color);
+        if (allyUnit.lives <= 0) {
+          allyUnit.active = false;
+          // Check if any allies still alive
+          const anyAlive = allies.some(a => a.active && a.lives > 0);
+          if (!anyAlive) {
+            state.aiEnabled = false;
+          }
         }
         updateHud();
+        break;
       }
     }
   }
@@ -2460,7 +2508,8 @@ function checkBulletHits(enemy, enemyIdx) {
 
 function checkPowerupPickup() {
   const collectors = [player];
-  if (ally.active) collectors.push(ally);
+  // Add all active allies as collectors
+  allies.forEach(a => { if (a.active && a.lives > 0) collectors.push(a); });
   if (player2.active) collectors.push(player2);
   
   const colors = { life: "#ff4488", shield: "#00e5ff", speed: "#ffcc00", rapid: "#00ff9a", spread: "#b000ff" };
@@ -2650,20 +2699,22 @@ function drawPlayer() {
 }
 
 function drawAlly() {
-  if (!ally.active) return;
-  ctx.save();
-  ctx.strokeStyle = ally.color;
-  ctx.lineWidth = 2;
-  ctx.shadowColor = ally.color;
-  ctx.shadowBlur = 10;
-  ctx.beginPath();
-  ctx.moveTo(ally.x + ally.w / 2, ally.y);
-  ctx.lineTo(ally.x + ally.w, ally.y + ally.h);
-  ctx.lineTo(ally.x + ally.w / 2, ally.y + ally.h * 0.65);
-  ctx.lineTo(ally.x, ally.y + ally.h);
-  ctx.closePath();
-  ctx.stroke();
-  ctx.restore();
+  allies.forEach(allyUnit => {
+    if (!allyUnit.active || allyUnit.lives <= 0) return;
+    ctx.save();
+    ctx.strokeStyle = allyUnit.color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = allyUnit.color;
+    ctx.shadowBlur = 10;
+    ctx.beginPath();
+    ctx.moveTo(allyUnit.x + allyUnit.w / 2, allyUnit.y);
+    ctx.lineTo(allyUnit.x + allyUnit.w, allyUnit.y + allyUnit.h);
+    ctx.lineTo(allyUnit.x + allyUnit.w / 2, allyUnit.y + allyUnit.h * 0.65);
+    ctx.lineTo(allyUnit.x, allyUnit.y + allyUnit.h);
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
+  });
 }
 
 function drawPlayer2() {
@@ -3122,8 +3173,12 @@ window.addEventListener("keydown", (event) => {
   if (event.code === "KeyI" && !event.repeat) {
     if (state.level >= state.aiUnlockLevel) {
       state.aiEnabled = !state.aiEnabled;
-      ally.active = state.aiEnabled;
-      if (ally.active && ally.lives <= 0) ally.lives = 3;
+      // Initialize allies if needed (only 1 for normal gameplay)
+      if (allies.length === 0) initAllies(1);
+      allies.forEach(a => {
+        a.active = state.aiEnabled;
+        if (a.active && a.lives <= 0) a.lives = 3;
+      });
       checkAchievement("ai_friend", state.aiEnabled);
     }
     updateHud();
@@ -3419,7 +3474,9 @@ function populateAdmin() {
   
   // AI
   setChk("admin-ai", state.aiEnabled);
-  setVal("admin-ailives", ally.lives);
+  setVal("admin-aicount", allies.length || 1);
+  const avgAllyLives = allies.length > 0 ? Math.round(allies.reduce((s, a) => s + a.lives, 0) / allies.length) : 3;
+  setVal("admin-ailives", avgAllyLives);
   setVal("admin-aiunlock", state.aiUnlockLevel);
   setVal("admin-aidamage", state.aiDamageMultiplier || 1);
   
@@ -3466,8 +3523,18 @@ function applyAdminSettings() {
   
   // AI
   state.aiEnabled = toChk("admin-ai");
-  ally.active = state.aiEnabled;
-  ally.lives = Math.max(0, Math.floor(toNum("admin-ailives", 3)));
+  const aiCount = Math.max(1, Math.min(10, Math.floor(toNum("admin-aicount", 1))));
+  const aiLives = Math.max(0, Math.floor(toNum("admin-ailives", 3)));
+  
+  // Reinitialize allies with new count
+  if (aiCount !== allies.length) {
+    initAllies(aiCount);
+  }
+  allies.forEach(a => {
+    a.active = state.aiEnabled;
+    a.lives = aiLives;
+  });
+  
   state.aiUnlockLevel = Math.max(1, Math.floor(toNum("admin-aiunlock", 2)));
   state.aiDamageMultiplier = Math.max(0.1, toNum("admin-aidamage", 1));
   
@@ -3492,7 +3559,8 @@ function applyAdminSettings() {
   config.spawnInterval = state.spawnInterval;
   config.aiUnlockLevel = state.aiUnlockLevel;
   config.aiEnabled = state.aiEnabled;
-  config.aiLives = ally.lives;
+  config.aiCount = allies.length || 1;
+  config.aiLives = allies.length > 0 ? allies[0].lives : 3;
   config.rapidLevel = state.rapidLevel;
   config.rapidTime = state.rapid;
   config.shieldTime = state.shield;
