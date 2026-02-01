@@ -67,6 +67,14 @@ Couch co-op mode for 2 players:
 - Separate life counts
 - Work together to beat the bosses!
 
+### 🌐 Online Lobby System
+Play with friends over the internet:
+- **Create Lobby**: Get a 6-character code to share
+- **Join Lobby**: Enter a friend's code to connect
+- Peer-to-peer connection via WebRTC
+- Real-time synchronized gameplay
+- No account or server required!
+
 ### 🏪 Shop System
 Earn credits by defeating enemies and buy:
 - New weapons

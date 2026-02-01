@@ -58,6 +58,29 @@ const achievementPopup = document.getElementById("achievement-popup");
 const achievementName = document.getElementById("achievement-name");
 const achievementDesc = document.getElementById("achievement-desc");
 
+// Online Lobby elements
+const onlineBtn = document.getElementById("online-btn");
+const lobbyPanel = document.getElementById("lobby");
+const lobbyStatus = document.getElementById("lobby-status");
+const lobbyMenu = document.getElementById("lobby-menu");
+const lobbyCreate = document.getElementById("lobby-create");
+const lobbyJoin = document.getElementById("lobby-join");
+const lobbyBack = document.getElementById("lobby-back");
+const lobbyHost = document.getElementById("lobby-host");
+const lobbyCodeEl = document.getElementById("lobby-code");
+const lobbyGuest = document.getElementById("lobby-guest");
+const lobbyStartGame = document.getElementById("lobby-start-game");
+const lobbyCancelHost = document.getElementById("lobby-cancel-host");
+const lobbyJoinForm = document.getElementById("lobby-join-form");
+const lobbyCodeInput = document.getElementById("lobby-code-input");
+const lobbyConnect = document.getElementById("lobby-connect");
+const lobbyCancelJoin = document.getElementById("lobby-cancel-join");
+const lobbyWaiting = document.getElementById("lobby-waiting");
+const lobbyHostName = document.getElementById("lobby-host-name");
+const lobbyLeave = document.getElementById("lobby-leave");
+const connectionStatus = document.getElementById("connection-status");
+const connectionText = document.getElementById("connection-text");
+
 // Touch controls
 const touchLeft = document.getElementById("touch-left");
 const touchRight = document.getElementById("touch-right");
@@ -78,6 +101,22 @@ const audioState = {
   bgmMaster: null,
   sfxVolume: 1,
   bgmVolume: 1,
+};
+
+// ============================================================================
+// ONLINE MULTIPLAYER (PeerJS)
+// ============================================================================
+let peer = null;
+let peerConnection = null;
+const netState = {
+  connected: false,
+  isHost: false,
+  lobbyCode: null,
+  guestConnected: false,
+  lastSync: 0,
+  syncInterval: 50, // ms between syncs
+  remotePlayer: { x: 0, y: 0, lives: 3, shooting: false },
+  remoteBullets: [],
 };
 
 // ============================================================================
@@ -155,6 +194,7 @@ const state = {
   inShop: false,
   inStory: false,
   multiplayer: false,
+  onlineMultiplayer: false,
   score: 0,
   credits: 0,
   lives: 3,
@@ -802,9 +842,11 @@ function openMenu() {
 function startGame() {
   state.inMenu = false;
   state.multiplayer = false;
+  state.onlineMultiplayer = false;
   menu.classList.add("hidden");
   reset();
   initAudio();
+  hideConnectionStatus();
   // Check for story
   if (STORY.find(s => s.chapter === 1) && state.storyChapter === 0) {
     startStory(1);
@@ -1015,6 +1057,15 @@ function spawnPowerup(x, y) {
 // ============================================================================
 function shoot() {
   if (player.cooldown > 0) return;
+  
+  // Send network bullet in online mode
+  if (state.onlineMultiplayer && netState.connected) {
+    sendNetworkData({
+      type: "bullet_fired",
+      x: player.x + player.w / 2 - 3,
+      y: player.y - 6,
+    });
+  }
   
   const weapon = WEAPONS.find(w => w.id === state.currentWeapon) || WEAPONS[0];
   const cooldown = weapon.cooldown * state.fireRateMultiplier;
@@ -1373,6 +1424,15 @@ function updatePlayer2(delta) {
 
 function player2Shoot() {
   if (!player2.active || player2.cooldown > 0) return;
+  
+  // In online mode, guest sends bullet to host
+  if (state.onlineMultiplayer && netState.connected && !netState.isHost) {
+    sendNetworkData({
+      type: "bullet_fired",
+      x: player2.x + player2.w / 2 - 3,
+      y: player2.y - 6,
+    });
+  }
   
   const cx = player2.x + player2.w / 2;
   const cy = player2.y;
@@ -2559,6 +2619,17 @@ function tick(timestamp) {
     updateAllyBullets(delta);
     updatePlayer2(delta);
     updateP2Bullets(delta);
+    
+    // Online multiplayer sync
+    if (state.onlineMultiplayer && netState.connected) {
+      sendPlayerUpdate();
+      updateOnlineRemotePlayer(delta);
+      // Host sends game state periodically
+      if (netState.isHost && Date.now() % 500 < 20) {
+        sendGameState();
+      }
+    }
+    
     updateEnemyBullets(delta);
     updateEnemies(delta);
     updatePowerups(delta);
@@ -2859,10 +2930,392 @@ function resetAllProgress() {
 }
 
 // ============================================================================
+// ONLINE LOBBY FUNCTIONS
+// ============================================================================
+function generateLobbyCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 6; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+function initPeer(id = null) {
+  return new Promise((resolve, reject) => {
+    const options = { debug: 0 };
+    peer = id ? new Peer(id, options) : new Peer(options);
+    
+    peer.on("open", (peerId) => {
+      console.log("Peer connected with ID:", peerId);
+      resolve(peerId);
+    });
+    
+    peer.on("error", (err) => {
+      console.error("Peer error:", err);
+      if (err.type === "unavailable-id") {
+        reject(new Error("Code already in use"));
+      } else if (err.type === "peer-unavailable") {
+        reject(new Error("Lobby not found"));
+      } else {
+        reject(err);
+      }
+    });
+    
+    peer.on("connection", (conn) => {
+      handleConnection(conn);
+    });
+  });
+}
+
+function handleConnection(conn) {
+  peerConnection = conn;
+  
+  conn.on("open", () => {
+    console.log("Connection opened");
+    netState.connected = true;
+    
+    if (netState.isHost) {
+      netState.guestConnected = true;
+      lobbyGuest.textContent = "👤 Guest Connected!";
+      lobbyGuest.classList.remove("waiting");
+      lobbyGuest.classList.add("connected");
+      lobbyStartGame.disabled = false;
+    }
+    
+    showConnectionStatus("🔗 Connected", "connected");
+  });
+  
+  conn.on("data", (data) => {
+    handleNetworkData(data);
+  });
+  
+  conn.on("close", () => {
+    console.log("Connection closed");
+    handleDisconnect();
+  });
+  
+  conn.on("error", (err) => {
+    console.error("Connection error:", err);
+    handleDisconnect();
+  });
+}
+
+function handleNetworkData(data) {
+  switch (data.type) {
+    case "player_update":
+      netState.remotePlayer.x = data.x;
+      netState.remotePlayer.y = data.y;
+      netState.remotePlayer.lives = data.lives;
+      break;
+      
+    case "bullet_fired":
+      // Add remote player's bullet
+      const bullet = {
+        x: data.x,
+        y: data.y,
+        w: 6,
+        h: 12,
+        speed: 520,
+        damage: 1,
+        color: netState.isHost ? "#ff6a6a" : "#00ff9a",
+        remote: true,
+      };
+      if (netState.isHost) {
+        p2Bullets.push(bullet);
+      } else {
+        bullets.push(bullet);
+      }
+      break;
+      
+    case "game_start":
+      if (!netState.isHost) {
+        lobbyPanel.classList.add("hidden");
+        state.inMenu = false;
+        state.multiplayer = true;
+        state.onlineMultiplayer = true;
+        reset();
+        initAudio();
+      }
+      break;
+      
+    case "game_state":
+      // Host sends full game state to guest
+      if (!netState.isHost) {
+        syncGameState(data.state);
+      }
+      break;
+      
+    case "enemy_killed":
+      // Sync kill from remote player
+      state.score = data.score;
+      state.killsThisLevel = data.kills;
+      break;
+      
+    case "powerup_collected":
+      // Remove collected powerup
+      const idx = powerups.findIndex(p => p.id === data.id);
+      if (idx >= 0) powerups.splice(idx, 1);
+      break;
+  }
+}
+
+function syncGameState(gameState) {
+  // Sync enemies, powerups, level, score from host
+  if (gameState.enemies) {
+    enemies.length = 0;
+    gameState.enemies.forEach(e => enemies.push(e));
+  }
+  if (gameState.powerups) {
+    powerups.length = 0;
+    gameState.powerups.forEach(p => powerups.push(p));
+  }
+  state.score = gameState.score || state.score;
+  state.level = gameState.level || state.level;
+  state.bossActive = gameState.bossActive || false;
+}
+
+function sendNetworkData(data) {
+  if (peerConnection && peerConnection.open) {
+    peerConnection.send(data);
+  }
+}
+
+function sendPlayerUpdate() {
+  const now = Date.now();
+  if (now - netState.lastSync < netState.syncInterval) return;
+  netState.lastSync = now;
+  
+  const localPlayer = netState.isHost ? player : player2;
+  sendNetworkData({
+    type: "player_update",
+    x: localPlayer.x,
+    y: localPlayer.y,
+    lives: netState.isHost ? state.lives : player2.lives,
+  });
+}
+
+function sendGameState() {
+  if (!netState.isHost) return;
+  
+  sendNetworkData({
+    type: "game_state",
+    state: {
+      enemies: enemies.map(e => ({ ...e })),
+      powerups: powerups.map(p => ({ ...p })),
+      score: state.score,
+      level: state.level,
+      bossActive: state.bossActive,
+    }
+  });
+}
+
+function handleDisconnect() {
+  netState.connected = false;
+  netState.guestConnected = false;
+  
+  if (state.onlineMultiplayer && !state.inMenu) {
+    // Show disconnect message during game
+    showConnectionStatus("❌ Disconnected", "disconnected");
+    setTimeout(() => {
+      openMenu();
+      state.onlineMultiplayer = false;
+    }, 2000);
+  }
+  
+  if (lobbyHost && !lobbyHost.classList.contains("hidden")) {
+    lobbyGuest.textContent = "⏳ Waiting for player...";
+    lobbyGuest.classList.add("waiting");
+    lobbyGuest.classList.remove("connected");
+    lobbyStartGame.disabled = true;
+  }
+}
+
+function showConnectionStatus(text, type) {
+  connectionText.textContent = text;
+  connectionStatus.className = "connection-status " + type;
+  connectionStatus.classList.remove("hidden");
+}
+
+function hideConnectionStatus() {
+  connectionStatus.classList.add("hidden");
+}
+
+function openLobby() {
+  menu.classList.add("hidden");
+  lobbyPanel.classList.remove("hidden");
+  lobbyStatus.textContent = "Connecting to network...";
+  lobbyMenu.classList.add("hidden");
+  lobbyHost.classList.add("hidden");
+  lobbyJoinForm.classList.add("hidden");
+  lobbyWaiting.classList.add("hidden");
+  
+  // Initialize PeerJS
+  initPeer().then(() => {
+    lobbyStatus.classList.add("hidden");
+    lobbyMenu.classList.remove("hidden");
+  }).catch(err => {
+    lobbyStatus.textContent = "❌ Connection failed: " + err.message;
+  });
+}
+
+function closeLobby() {
+  lobbyPanel.classList.add("hidden");
+  menu.classList.remove("hidden");
+  
+  // Cleanup peer
+  if (peerConnection) {
+    peerConnection.close();
+    peerConnection = null;
+  }
+  if (peer) {
+    peer.destroy();
+    peer = null;
+  }
+  
+  netState.connected = false;
+  netState.isHost = false;
+  netState.guestConnected = false;
+  hideConnectionStatus();
+}
+
+function createLobby() {
+  netState.isHost = true;
+  netState.lobbyCode = generateLobbyCode();
+  
+  lobbyMenu.classList.add("hidden");
+  lobbyHost.classList.remove("hidden");
+  lobbyCodeEl.textContent = netState.lobbyCode;
+  lobbyGuest.textContent = "⏳ Waiting for player...";
+  lobbyGuest.classList.add("waiting");
+  lobbyGuest.classList.remove("connected");
+  lobbyStartGame.disabled = true;
+  
+  // Reinitialize peer with lobby code as ID
+  if (peer) peer.destroy();
+  
+  initPeer("M4TRIX_" + netState.lobbyCode).then(() => {
+    console.log("Lobby created:", netState.lobbyCode);
+  }).catch(err => {
+    lobbyCodeEl.textContent = "ERROR";
+    console.error("Failed to create lobby:", err);
+  });
+}
+
+function showJoinForm() {
+  lobbyMenu.classList.add("hidden");
+  lobbyJoinForm.classList.remove("hidden");
+  lobbyCodeInput.value = "";
+  lobbyCodeInput.focus();
+}
+
+function joinLobby() {
+  const code = lobbyCodeInput.value.toUpperCase().trim();
+  if (code.length !== 6) {
+    lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+    return;
+  }
+  
+  lobbyCodeInput.style.borderColor = "";
+  netState.isHost = false;
+  netState.lobbyCode = code;
+  
+  // Connect to host
+  const hostId = "M4TRIX_" + code;
+  
+  try {
+    const conn = peer.connect(hostId, { reliable: true });
+    
+    conn.on("open", () => {
+      handleConnection(conn);
+      lobbyJoinForm.classList.add("hidden");
+      lobbyWaiting.classList.remove("hidden");
+    });
+    
+    conn.on("error", (err) => {
+      console.error("Join error:", err);
+      lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+    });
+    
+    // Timeout for connection
+    setTimeout(() => {
+      if (!peerConnection) {
+        lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+      }
+    }, 5000);
+    
+  } catch (err) {
+    console.error("Failed to connect:", err);
+    lobbyCodeInput.style.borderColor = "var(--matrix-red)";
+  }
+}
+
+function startOnlineGame() {
+  if (!netState.isHost || !netState.guestConnected) return;
+  
+  // Send start signal to guest
+  sendNetworkData({ type: "game_start" });
+  
+  // Start game locally
+  lobbyPanel.classList.add("hidden");
+  state.inMenu = false;
+  state.multiplayer = true;
+  state.onlineMultiplayer = true;
+  reset();
+  initAudio();
+  
+  showConnectionStatus("🔗 Playing Online", "connected");
+}
+
+function leaveLobby() {
+  if (peerConnection) peerConnection.close();
+  closeLobby();
+}
+
+function updateOnlineRemotePlayer(delta) {
+  // Update remote player position (smooth interpolation)
+  if (netState.isHost) {
+    // Host controls player, guest is player2
+    player2.x += (netState.remotePlayer.x - player2.x) * 0.3;
+    player2.y += (netState.remotePlayer.y - player2.y) * 0.3;
+    player2.lives = netState.remotePlayer.lives;
+    player2.active = true;
+  } else {
+    // Guest sees host as player
+    player.x += (netState.remotePlayer.x - player.x) * 0.3;
+    player.y += (netState.remotePlayer.y - player.y) * 0.3;
+    state.lives = netState.remotePlayer.lives;
+  }
+}
+
+// Override shoot to send network data in online mode
+const originalShoot = typeof shoot === 'function' ? shoot : null;
+function shootWithNetwork() {
+  if (state.onlineMultiplayer && netState.connected) {
+    const localPlayer = netState.isHost ? player : player2;
+    sendNetworkData({
+      type: "bullet_fired",
+      x: localPlayer.x + localPlayer.w / 2 - 3,
+      y: localPlayer.y - 6,
+    });
+  }
+}
+
+// ============================================================================
 // EVENT LISTENERS
 // ============================================================================
 startBtn?.addEventListener("click", () => startGame());
 multiplayerBtn?.addEventListener("click", () => startMultiplayer());
+onlineBtn?.addEventListener("click", () => openLobby());
+lobbyCreate?.addEventListener("click", () => createLobby());
+lobbyJoin?.addEventListener("click", () => showJoinForm());
+lobbyBack?.addEventListener("click", () => closeLobby());
+lobbyConnect?.addEventListener("click", () => joinLobby());
+lobbyCancelHost?.addEventListener("click", () => closeLobby());
+lobbyCancelJoin?.addEventListener("click", () => { lobbyJoinForm.classList.add("hidden"); lobbyMenu.classList.remove("hidden"); });
+lobbyStartGame?.addEventListener("click", () => startOnlineGame());
+lobbyLeave?.addEventListener("click", () => leaveLobby());
+lobbyCodeInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") joinLobby(); });
 storyBtn?.addEventListener("click", () => { startStory(1); });
 achievementsBtn?.addEventListener("click", () => { renderAchievements(); achievementsPanel.classList.remove("hidden"); });
 highscoreBtn?.addEventListener("click", () => { renderHighscores(); highscoresPanel.classList.remove("hidden"); });
