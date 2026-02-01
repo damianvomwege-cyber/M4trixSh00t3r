@@ -24,6 +24,10 @@ const restartBtn = document.getElementById("restart-btn");
 const shopOverlayBtn = document.getElementById("shop-overlay-btn");
 const adminOverlayBtn = document.getElementById("admin-overlay-btn");
 const menuBtn = document.getElementById("menu-btn");
+const adOverlay = document.getElementById("ad-overlay");
+const adTimer = document.getElementById("ad-timer");
+const adSkip = document.getElementById("ad-skip");
+const freePowerupBtn = document.getElementById("free-powerup-btn");
 const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start-btn");
 const multiplayerBtn = document.getElementById("multiplayer-btn");
@@ -255,6 +259,7 @@ const state = {
   p1RespawnTimer: 0,
   p2RespawnTimer: 0,
   p1Dead: false,
+  p1Invincible: 0, // Invincibility timer for P1
 };
 
 const player = {
@@ -889,12 +894,18 @@ function updateRespawns(delta) {
       // Respawn P1
       state.lives = 1;
       state.p1Dead = false;
+      state.p1Invincible = 2; // 2 seconds invincibility
       state.p1RespawnTimer = 0;
       player.x = state.width / 2 - player.w / 2;
       player.y = state.height - player.h - 60;
       addDamageNumber(player.x + player.w / 2, player.y, "P1 RESPAWNED!", false);
       addExplosion(player.x + player.w / 2, player.y + player.h / 2, "#00ff9a", 15);
     }
+  }
+  
+  // Update P1 invincibility
+  if (state.p1Invincible > 0) {
+    state.p1Invincible -= delta;
   }
   
   // Update P2 respawn timer
@@ -925,6 +936,133 @@ function gameOver() {
   playGameOver();
   stopBgm();
   saveHighscore();
+  // Hide free powerup button
+  if (freePowerupBtn) freePowerupBtn.classList.remove("visible");
+}
+
+// ============================================================================
+// AD SYSTEM - Watch ads for free powerups
+// ============================================================================
+let adState = {
+  watching: false,
+  timeLeft: 0,
+  reward: null,
+  cooldown: 0, // Cooldown between ads
+};
+
+function showFreePowerupButton() {
+  // Show the button after 30 seconds of gameplay, with 60 second cooldown between uses
+  if (freePowerupBtn && state.running && !state.paused && !state.inMenu && adState.cooldown <= 0) {
+    freePowerupBtn.classList.add("visible");
+  }
+}
+
+function hideFreePowerupButton() {
+  if (freePowerupBtn) freePowerupBtn.classList.remove("visible");
+}
+
+function startWatchingAd() {
+  if (adState.watching || adState.cooldown > 0) return;
+  
+  adState.watching = true;
+  adState.timeLeft = 5; // 5 seconds ad
+  adState.reward = getRandomPowerupType();
+  
+  // Pause the game
+  state.paused = true;
+  hideFreePowerupButton();
+  
+  // Show ad overlay
+  if (adOverlay) adOverlay.classList.remove("hidden");
+  if (adSkip) adSkip.classList.add("hidden");
+  
+  updateAdTimer();
+}
+
+function updateAdTimer() {
+  if (!adState.watching) return;
+  
+  if (adTimer) {
+    adTimer.textContent = `Werbung endet in: ${Math.ceil(adState.timeLeft)}s`;
+  }
+  
+  if (adState.timeLeft <= 0) {
+    // Ad finished - give reward
+    finishAd();
+  } else if (adState.timeLeft <= 2) {
+    // Show skip button after 3 seconds
+    if (adSkip) adSkip.classList.remove("hidden");
+  }
+}
+
+function finishAd() {
+  adState.watching = false;
+  adState.cooldown = 60; // 60 second cooldown
+  
+  // Hide ad overlay
+  if (adOverlay) adOverlay.classList.add("hidden");
+  
+  // Resume game
+  state.paused = false;
+  
+  // Give the reward powerup
+  giveFreePowerup(adState.reward);
+  
+  // Show notification
+  addDamageNumber(state.width / 2, state.height / 2, `FREE ${adState.reward.toUpperCase()}!`, false);
+  playPickup();
+}
+
+function skipAd() {
+  if (adState.timeLeft <= 2) {
+    finishAd();
+  }
+}
+
+function getRandomPowerupType() {
+  const types = ["rapid", "shield", "life", "speed", "spread"];
+  return types[Math.floor(Math.random() * types.length)];
+}
+
+function giveFreePowerup(type) {
+  switch (type) {
+    case "rapid":
+      if (state.rapid > 0) {
+        state.rapid = Math.min(120, state.rapid + 30);
+        state.rapidLevel = Math.min(20, state.rapidLevel + 1);
+      } else {
+        state.rapid = 60;
+        state.rapidLevel = 1;
+      }
+      break;
+    case "shield":
+      state.shield = Math.min(120, state.shield + 60);
+      break;
+    case "life":
+      state.lives++;
+      break;
+    case "speed":
+      state.speed = Math.min(120, state.speed + 60);
+      break;
+    case "spread":
+      state.spread = Math.min(120, state.spread + 60);
+      break;
+  }
+  updateHud();
+}
+
+function updateAdCooldown(delta) {
+  if (adState.cooldown > 0) {
+    adState.cooldown -= delta;
+    if (adState.cooldown <= 0) {
+      showFreePowerupButton();
+    }
+  }
+  
+  if (adState.watching) {
+    adState.timeLeft -= delta;
+    updateAdTimer();
+  }
 }
 
 function openMenu() {
@@ -986,6 +1124,7 @@ function reset() {
   state.p1RespawnTimer = 0;
   state.p2RespawnTimer = 0;
   state.p1Dead = false;
+  state.p1Invincible = 0;
   
   overlay.classList.add("hidden");
   if (resumeBtn) resumeBtn.classList.add("hidden");
@@ -2048,12 +2187,12 @@ function updateParticles(delta) {
 // COLLISION DETECTION
 // ============================================================================
 function checkCollisions() {
-  // Player vs enemies (skip if P1 is dead in multiplayer)
+  // Player vs enemies (skip if P1 is dead or invincible)
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     
-    // Skip P1 collision if dead
-    if (state.p1Dead) {
+    // Skip P1 collision if dead or invincible
+    if (state.p1Dead || state.p1Invincible > 0) {
       checkBulletHits(enemy, i);
       continue;
     }
@@ -2092,8 +2231,8 @@ function checkCollisions() {
     checkBulletHits(enemy, i);
   }
   
-  // Player vs enemy bullets (skip if P1 is dead in multiplayer)
-  if (!state.p1Dead) {
+  // Player vs enemy bullets (skip if P1 is dead or invincible)
+  if (!state.p1Dead && state.p1Invincible <= 0) {
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
       if (rectsOverlap(player, enemyBullets[i])) {
         const b = enemyBullets[i];
@@ -2426,6 +2565,11 @@ function drawPlayer() {
       ctx.restore();
     }
     return;
+  }
+  
+  // Blinking effect when invincible (after respawn)
+  if (state.p1Invincible > 0 && Math.floor(Date.now() / 100) % 2 === 0) {
+    return; // Skip drawing every other frame for blink effect
   }
   
   ctx.save();
@@ -2846,9 +2990,15 @@ function tick(timestamp) {
     updateSpawns(delta);
     updateEffects(slowMoActive ? delta / state.slowMoFactor : delta);
     updateRespawns(delta);
+    updateAdCooldown(delta);
     checkCollisions();
     checkPowerupPickup();
     updateHud();
+    
+    // Show free powerup button after 30 seconds of gameplay
+    if (!freePowerupBtn?.classList.contains("visible") && adState.cooldown <= 0) {
+      showFreePowerupButton();
+    }
   }
 
   // Apply screen shake
@@ -3660,6 +3810,14 @@ menuBtn?.addEventListener("click", () => {
   if (restartBtn) restartBtn.classList.add("hidden");
   openMenu();
 });
+
+// Ad system event listeners
+freePowerupBtn?.addEventListener("click", () => startWatchingAd());
+freePowerupBtn?.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  startWatchingAd();
+});
+adSkip?.addEventListener("click", () => skipAd());
 
 // ============================================================================
 // INIT
