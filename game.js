@@ -97,6 +97,7 @@ const joystickBase = document.getElementById("joystick-base");
 const joystickStick = document.getElementById("joystick-stick");
 const touchFire = document.getElementById("touch-fire");
 const touchWeapon = document.getElementById("touch-weapon");
+const touchNuke = document.getElementById("touch-nuke");
 
 // Joystick state
 const joystick = {
@@ -260,6 +261,9 @@ const state = {
   p2RespawnTimer: 0,
   p1Dead: false,
   p1Invincible: 0, // Invincibility timer for P1
+  // Ultimate ability
+  nukeCooldown: 0, // Nuke ability cooldown (30 seconds)
+  nukeReady: true,
 };
 
 const player = {
@@ -393,6 +397,14 @@ function updateHud() {
   if (state.shield > 0) active.push(`Shield (${Math.ceil(state.shield)}s)`);
   if (state.speed > 0) active.push(`Speed (${Math.ceil(state.speed)}s)`);
   if (state.spread > 0) active.push(`Spread (${Math.ceil(state.spread)}s)`);
+  
+  // Add nuke status
+  if (state.nukeReady) {
+    active.push("☢ NUKE [Q]");
+  } else if (state.nukeCooldown > 0) {
+    active.push(`☢ Nuke (${Math.ceil(state.nukeCooldown)}s)`);
+  }
+  
   buffsEl.textContent = `Powerups: ${active.length ? active.join(" + ") : "-"}`;
   
   if (state.level < state.aiUnlockLevel) {
@@ -1125,6 +1137,8 @@ function reset() {
   state.p2RespawnTimer = 0;
   state.p1Dead = false;
   state.p1Invincible = 0;
+  state.nukeCooldown = 0;
+  state.nukeReady = true;
   
   overlay.classList.add("hidden");
   if (resumeBtn) resumeBtn.classList.add("hidden");
@@ -1403,6 +1417,113 @@ function switchWeapon(delta = 1) {
   const nextIdx = (currentIdx + delta + unlockedWeapons.length) % unlockedWeapons.length;
   state.currentWeapon = unlockedWeapons[nextIdx].id;
   updateHud();
+}
+
+// ============================================================================
+// NUKE - Ultimate ability that kills all visible enemies
+// ============================================================================
+function activateNuke() {
+  if (state.nukeCooldown > 0 || !state.nukeReady) {
+    addDamageNumber(state.width / 2, state.height / 2, `NUKE: ${Math.ceil(state.nukeCooldown)}s`, true);
+    return;
+  }
+  
+  // Start cooldown
+  state.nukeCooldown = 30;
+  state.nukeReady = false;
+  
+  // Epic screen flash
+  triggerFlash("#ff00ff", 0.5);
+  screenShake(1.0, 30);
+  triggerSlowMo(0.8, 0.2);
+  
+  // Play epic sound
+  if (audioCtx) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(2000, audioCtx.currentTime + 0.3);
+    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.8);
+    gain.gain.setValueAtTime(audioState.sfxVolume * 0.5, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 1);
+  }
+  
+  // Kill all visible enemies
+  let killCount = 0;
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const enemy = enemies[i];
+    
+    // Skip bosses - they take massive damage instead
+    if (enemy.type === "boss") {
+      const damage = enemy.maxHp * 0.25; // 25% of boss HP
+      enemy.hp -= damage;
+      addDamageNumber(enemy.x + enemy.w / 2, enemy.y, Math.floor(damage), true);
+      addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff", 30);
+      addLightning(state.width / 2, state.height, enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff");
+      continue;
+    }
+    
+    // Check if enemy is visible on screen
+    if (enemy.y > -enemy.h && enemy.y < state.height) {
+      killCount++;
+      
+      // Epic explosion for each enemy
+      addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff", 20);
+      addLightning(state.width / 2, state.height, enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff");
+      
+      // Score
+      const baseScore = 100;
+      const multiplier = getScoreMultiplier();
+      state.score += Math.floor(baseScore * multiplier);
+      state.killsThisLevel++;
+      
+      // Remove enemy
+      enemies.splice(i, 1);
+    }
+  }
+  
+  // Also clear enemy bullets
+  for (const b of enemyBullets) {
+    addExplosion(b.x, b.y, "#ff00ff", 5);
+  }
+  enemyBullets.length = 0;
+  
+  // Show kill count
+  addDamageNumber(state.width / 2, state.height / 2 - 50, `☢ NUKE ☢`, true);
+  addDamageNumber(state.width / 2, state.height / 2, `${killCount} KILLS!`, false);
+  
+  // Add combo for all kills
+  for (let i = 0; i < killCount; i++) {
+    addCombo();
+  }
+  
+  updateHud();
+}
+
+function updateNukeCooldown(delta) {
+  if (state.nukeCooldown > 0) {
+    state.nukeCooldown -= delta;
+    if (state.nukeCooldown <= 0) {
+      state.nukeCooldown = 0;
+      state.nukeReady = true;
+      addDamageNumber(state.width / 2, state.height - 80, "☢ NUKE READY!", false);
+    }
+    // Update mobile button
+    if (touchNuke) {
+      if (state.nukeReady) {
+        touchNuke.classList.remove("cooldown");
+        touchNuke.textContent = "☢";
+      } else {
+        touchNuke.classList.add("cooldown");
+        touchNuke.textContent = Math.ceil(state.nukeCooldown);
+      }
+    }
+  }
 }
 
 function allyShoot() {
@@ -2991,6 +3112,7 @@ function tick(timestamp) {
     updateEffects(slowMoActive ? delta / state.slowMoFactor : delta);
     updateRespawns(delta);
     updateAdCooldown(delta);
+    updateNukeCooldown(delta);
     checkCollisions();
     checkPowerupPickup();
     updateHud();
@@ -3098,6 +3220,12 @@ window.addEventListener("keydown", (event) => {
       checkAchievement("ai_friend", state.aiEnabled);
     }
     updateHud();
+    return;
+  }
+  
+  // Q = Nuke (Ultimate ability)
+  if (event.code === "KeyQ") {
+    activateNuke();
     return;
   }
   
@@ -3296,6 +3424,34 @@ if (touchWeapon) {
     e.preventDefault();
     touchWeapon.classList.remove("active");
   }, { passive: false });
+}
+
+// Nuke button
+if (touchNuke) {
+  touchNuke.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    if (state.nukeReady) {
+      touchNuke.classList.add("active");
+      activateNuke();
+    }
+  }, { passive: false });
+
+  touchNuke.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    touchNuke.classList.remove("active");
+  }, { passive: false });
+}
+
+// Update nuke button appearance based on cooldown
+function updateNukeButton() {
+  if (!touchNuke) return;
+  if (state.nukeReady) {
+    touchNuke.classList.remove("cooldown");
+    touchNuke.textContent = "☢";
+  } else {
+    touchNuke.classList.add("cooldown");
+    touchNuke.textContent = Math.ceil(state.nukeCooldown);
+  }
 }
 
 // ============================================================================
