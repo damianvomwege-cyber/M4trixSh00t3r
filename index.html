@@ -85,9 +85,19 @@
           <button id="chat-api-toggle" class="btn btn-small">🔑 API Key</button>
         </div>
         <div id="chat-api-input" class="chat-api-input hidden">
-          <input type="password" id="chat-api-key" placeholder="OpenAI API Key (sk-...)" />
+          <div class="chat-provider-select">
+            <label>Provider:</label>
+            <select id="chat-api-provider">
+              <option value="groq">🆓 Groq (KOSTENLOS!)</option>
+              <option value="openai">OpenAI (bezahlt)</option>
+            </select>
+          </div>
+          <input type="password" id="chat-api-key" placeholder="API Key eingeben..." />
           <button id="chat-api-save" class="btn btn-small">💾</button>
           <button id="chat-api-clear" class="btn btn-small">🗑️</button>
+          <div class="chat-api-help">
+            <a href="https://console.groq.com/keys" target="_blank">🆓 Kostenlosen Groq Key holen</a>
+          </div>
         </div>
         <div id="chat-messages" class="chat-messages">
           <div class="chat-message ai">
@@ -95,10 +105,10 @@
             <div class="chat-bubble">
               Willkommen im System, Neo. Ich bin die Oracle - eine KI aus der Matrix. 🔮
               <br><br>
-              <b>💡 Tipp:</b> Klick auf "🔑 API Key" und gib deinen OpenAI API Key ein, 
-              um mich mit GPT-4 zu verbinden. Dann kann ich ALLES beantworten!
+              <b>🆓 KOSTENLOS:</b> Klick auf "🔑 API Key" → Wähle <b>Groq</b> → 
+              Hol dir einen <a href="https://console.groq.com/keys" target="_blank" style="color:#00c8ff;">kostenlosen API Key</a>!
               <br><br>
-              Ohne API Key funktioniere ich im Offline-Modus mit begrenztem Wissen.
+              Mit Groq kann ich ALLES beantworten - komplett gratis und ohne Limits! 🚀
             </div>
           </div>
         </div>

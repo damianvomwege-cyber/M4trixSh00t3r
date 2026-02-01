@@ -41,6 +41,7 @@ const chatApiInput = document.getElementById("chat-api-input");
 const chatApiKey = document.getElementById("chat-api-key");
 const chatApiSave = document.getElementById("chat-api-save");
 const chatApiClear = document.getElementById("chat-api-clear");
+const chatApiProvider = document.getElementById("chat-api-provider");
 const p2StatsEl = document.getElementById("p2-stats");
 const p2LivesEl = document.getElementById("p2-lives");
 const achievementsBtn = document.getElementById("achievements-btn");
@@ -4696,48 +4697,77 @@ function removeTypingIndicator() {
 }
 
 // ============================================================================
-// OPENAI API INTEGRATION
+// AI API INTEGRATION (Groq FREE / OpenAI)
 // ============================================================================
 const chatAI = {
-  apiKey: localStorage.getItem("matrix_openai_key") || "",
+  apiKey: localStorage.getItem("matrix_ai_key") || "",
+  provider: localStorage.getItem("matrix_ai_provider") || "groq",
   conversationHistory: [],
   maxHistory: 10,
+  lastRequestTime: 0,
+  minRequestInterval: 500, // Groq is faster, 500ms is enough
+  
+  providers: {
+    groq: {
+      name: "Groq",
+      url: "https://api.groq.com/openai/v1/chat/completions",
+      model: "llama-3.3-70b-versatile",
+      keyPrefix: "gsk_",
+      free: true
+    },
+    openai: {
+      name: "OpenAI",
+      url: "https://api.openai.com/v1/chat/completions",
+      model: "gpt-4o-mini",
+      keyPrefix: "sk-",
+      free: false
+    }
+  },
   
   isOnline() {
-    return this.apiKey && this.apiKey.startsWith("sk-");
+    if (!this.apiKey) return false;
+    const provider = this.providers[this.provider];
+    return this.apiKey.startsWith(provider.keyPrefix);
   },
   
   updateStatus() {
     if (chatApiStatus) {
       if (this.isOnline()) {
-        chatApiStatus.textContent = "🟢 Online - GPT-4 aktiv";
+        const provider = this.providers[this.provider];
+        const freeLabel = provider.free ? " 🆓" : "";
+        chatApiStatus.textContent = `🟢 Online - ${provider.name}${freeLabel}`;
         chatApiStatus.className = "chat-api-status online";
       } else {
         chatApiStatus.textContent = "⚫ Offline Modus";
         chatApiStatus.className = "chat-api-status offline";
       }
     }
+    // Update provider dropdown
+    if (chatApiProvider) {
+      chatApiProvider.value = this.provider;
+    }
   },
   
-  saveApiKey(key) {
+  saveApiKey(key, provider) {
     this.apiKey = key;
-    localStorage.setItem("matrix_openai_key", key);
+    this.provider = provider || this.provider;
+    localStorage.setItem("matrix_ai_key", key);
+    localStorage.setItem("matrix_ai_provider", this.provider);
     this.updateStatus();
   },
   
   clearApiKey() {
     this.apiKey = "";
-    localStorage.removeItem("matrix_openai_key");
+    localStorage.removeItem("matrix_ai_key");
     this.updateStatus();
   },
   
-  lastRequestTime: 0,
-  minRequestInterval: 1000, // Minimum 1 second between requests
-  
-  async askGPT(message, retryCount = 0) {
+  async askAI(message, retryCount = 0) {
     if (!this.isOnline()) {
       return null;
     }
+    
+    const provider = this.providers[this.provider];
     
     // Rate limiting - wait if too fast
     const now = Date.now();
@@ -4774,14 +4804,14 @@ Spielinfos falls gefragt:
 - Shop mit B öffnen`;
 
     try {
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      const response = await fetch(provider.url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${this.apiKey}`
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: provider.model,
           messages: [
             { role: "system", content: systemPrompt },
             ...this.conversationHistory
@@ -4792,39 +4822,37 @@ Spielinfos falls gefragt:
       });
       
       if (!response.ok) {
-        const error = await response.json();
-        console.error("OpenAI API Error:", error);
+        const error = await response.json().catch(() => ({}));
+        console.error(`${provider.name} API Error:`, error);
         
         if (response.status === 401) {
-          return "❌ API Key ungültig! Bitte überprüfe deinen OpenAI API Key.";
+          return `❌ API Key ungültig! Bitte überprüfe deinen ${provider.name} API Key.`;
         } else if (response.status === 429) {
           // Rate limit - retry with exponential backoff
           if (retryCount < 3) {
-            const waitTime = Math.pow(2, retryCount + 1) * 1000; // 2s, 4s, 8s
+            const waitTime = Math.pow(2, retryCount + 1) * 1000;
             console.log(`Rate limit hit, retrying in ${waitTime}ms...`);
             await new Promise(resolve => setTimeout(resolve, waitTime));
-            // Remove the message we just added (will be re-added on retry)
             this.conversationHistory.pop();
-            return this.askGPT(message, retryCount + 1);
+            return this.askAI(message, retryCount + 1);
           }
-          return "⚠️ Rate Limit erreicht. Warte 30 Sekunden und versuch es nochmal.\n\n💡 Tipp: Lade Guthaben auf deinen OpenAI Account für höhere Limits!";
+          return "⚠️ Rate Limit erreicht. Warte einen Moment und versuch es nochmal.";
         } else if (response.status === 402 || response.status === 400) {
-          return "💳 OpenAI Guthaben aufgebraucht oder Problem mit dem Account. Bitte check dein OpenAI Dashboard.";
+          return `💳 Problem mit dem ${provider.name} Account. Bitte check dein Dashboard.`;
         }
         
-        return null; // Fallback to offline mode
+        return null;
       }
       
       const data = await response.json();
       const assistantMessage = data.choices[0].message.content;
       
-      // Add assistant response to history
       this.conversationHistory.push({ role: "assistant", content: assistantMessage });
       
       return assistantMessage;
     } catch (error) {
-      console.error("OpenAI API Error:", error);
-      return null; // Fallback to offline mode
+      console.error(`${provider.name} API Error:`, error);
+      return null;
     }
   }
 };
@@ -4846,7 +4874,7 @@ async function sendChatMessage() {
   // Try online API first, fallback to offline
   if (chatAI.isOnline()) {
     try {
-      const response = await chatAI.askGPT(message);
+      const response = await chatAI.askAI(message);
       removeTypingIndicator();
       
       if (response) {
@@ -4892,14 +4920,20 @@ function setupChatListeners() {
     if (chatApiKey && chatAI.apiKey) {
       chatApiKey.value = chatAI.apiKey;
     }
+    if (chatApiProvider) {
+      chatApiProvider.value = chatAI.provider;
+    }
   });
   
   chatApiSave?.addEventListener("click", () => {
     const key = chatApiKey?.value?.trim();
+    const provider = chatApiProvider?.value || "groq";
     if (key) {
-      chatAI.saveApiKey(key);
+      chatAI.saveApiKey(key, provider);
       chatApiInput?.classList.add("hidden");
-      addChatMessage("🔑 API Key gespeichert! Du bist jetzt mit GPT-4 verbunden. Frag mich alles! 🚀", false);
+      const providerName = chatAI.providers[provider]?.name || provider;
+      const freeLabel = chatAI.providers[provider]?.free ? " (KOSTENLOS!)" : "";
+      addChatMessage(`🔑 API Key gespeichert! Du bist jetzt mit ${providerName}${freeLabel} verbunden. Frag mich ALLES! 🚀`, false);
     }
   });
   
@@ -4915,6 +4949,14 @@ function setupChatListeners() {
       e.preventDefault();
       e.stopPropagation();
       chatApiSave?.click();
+    }
+  });
+  
+  // Update key placeholder based on provider
+  chatApiProvider?.addEventListener("change", () => {
+    const provider = chatAI.providers[chatApiProvider.value];
+    if (chatApiKey && provider) {
+      chatApiKey.placeholder = `${provider.name} API Key (${provider.keyPrefix}...)`;
     }
   });
   

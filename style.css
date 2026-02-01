@@ -1169,3 +1169,56 @@ canvas#game {
   outline: none;
   border-color: var(--matrix-green);
 }
+
+.chat-provider-select {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.chat-provider-select label {
+  font-size: 12px;
+  color: var(--matrix-cyan);
+}
+
+.chat-provider-select select {
+  flex: 1;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(0, 255, 154, 0.3);
+  border-radius: 4px;
+  color: var(--matrix-green);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.chat-provider-select select:focus {
+  outline: none;
+  border-color: var(--matrix-green);
+}
+
+.chat-api-help {
+  width: 100%;
+  margin-top: 8px;
+  text-align: center;
+}
+
+.chat-api-help a {
+  color: var(--matrix-cyan);
+  font-size: 12px;
+  text-decoration: none;
+  padding: 6px 12px;
+  background: rgba(0, 200, 255, 0.1);
+  border: 1px solid rgba(0, 200, 255, 0.3);
+  border-radius: 4px;
+  display: inline-block;
+  transition: all 0.2s ease;
+}
+
+.chat-api-help a:hover {
+  background: rgba(0, 200, 255, 0.2);
+  border-color: var(--matrix-cyan);
+  box-shadow: 0 0 10px rgba(0, 200, 255, 0.3);
+}
