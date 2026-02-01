@@ -259,7 +259,7 @@ const state = {
   p1Dead: false,
   p1Invincible: 0, // Invincibility timer for P1
   // Ultimate ability
-  nukeCooldown: 0, // Nuke ability cooldown (30 seconds)
+  nukeCooldown: 0, // Nuke ability cooldown (3 minutes)
   nukeReady: true,
   // Admin panel state
   wasRunning: true,
@@ -1311,8 +1311,8 @@ function activateNuke() {
     return;
   }
   
-  // Start cooldown
-  state.nukeCooldown = 30;
+  // Start cooldown (3 minutes)
+  state.nukeCooldown = 180;
   state.nukeReady = false;
   
   // Epic screen flash
