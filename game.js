@@ -82,12 +82,23 @@ const connectionStatus = document.getElementById("connection-status");
 const connectionText = document.getElementById("connection-text");
 
 // Touch controls
-const touchLeft = document.getElementById("touch-left");
-const touchRight = document.getElementById("touch-right");
-const touchUp = document.getElementById("touch-up");
-const touchDown = document.getElementById("touch-down");
+const joystickZone = document.getElementById("joystick-zone");
+const joystickBase = document.getElementById("joystick-base");
+const joystickStick = document.getElementById("joystick-stick");
 const touchFire = document.getElementById("touch-fire");
 const touchWeapon = document.getElementById("touch-weapon");
+
+// Joystick state
+const joystick = {
+  active: false,
+  startX: 0,
+  startY: 0,
+  currentX: 0,
+  currentY: 0,
+  dx: 0,
+  dy: 0,
+  maxDistance: 40,
+};
 
 // Audio
 let audioCtx = null;
@@ -305,6 +316,7 @@ const player2 = {
   color: "#ff6a6a",
   active: false,
   lives: 3,
+  invincibleTimer: 0, // Invincibility frames after taking damage
 };
 
 const p2Bullets = [];
@@ -911,6 +923,7 @@ function reset() {
   player2.active = state.multiplayer;
   player2.lives = 3;
   player2.cooldown = 0;
+  player2.invincibleTimer = 0;
   player2.x = state.width / 2 - player2.w / 2 + 60;
   player2.y = state.height - player2.h - 60;
   
@@ -1409,6 +1422,11 @@ function updatePlayer(delta) {
 
 function updatePlayer2(delta) {
   if (!player2.active) return;
+  
+  // Decrement invincibility timer
+  if (player2.invincibleTimer > 0) {
+    player2.invincibleTimer -= delta;
+  }
   
   // In online mode as guest, player2 represents OUR ship (controlled by us)
   if (state.onlineMultiplayer && !netState.isHost) {
@@ -2021,13 +2039,19 @@ function checkCollisions() {
     }
   }
   
-  // Player 2 vs enemies
-  if (player2.active) {
+  // Player 2 vs enemies - only in local multiplayer or if we are guest in online (guest handles own collisions)
+  // In online multiplayer: Host checks player2 collision only for LOCAL player2 (but player2 is remote for host)
+  // So we skip player2 collision entirely if online AND we are host (player2 is remote, they handle their own)
+  const shouldCheckPlayer2Collisions = player2.active && 
+    (!state.onlineMultiplayer || !netState.isHost);
+  
+  if (shouldCheckPlayer2Collisions && player2.invincibleTimer <= 0) {
     for (let i = enemies.length - 1; i >= 0; i--) {
       const enemy = enemies[i];
       if (enemy.type === "boss") continue;
       if (rectsOverlap(player2, enemy)) {
         player2.lives--;
+        player2.invincibleTimer = 1.5; // 1.5 seconds of invincibility
         enemies.splice(i, 1);
         addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff6a6a", 15);
         addExplosion(player2.x + player2.w / 2, player2.y + player2.h / 2, "#ff6a6a", 10);
@@ -2039,24 +2063,29 @@ function checkCollisions() {
           addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 DOWN!", true);
         }
         updateHud();
+        break; // Only take one hit per frame
       }
     }
     
     // Player 2 vs enemy bullets
-    for (let i = enemyBullets.length - 1; i >= 0; i--) {
-      if (rectsOverlap(player2, enemyBullets[i])) {
-        const b = enemyBullets[i];
-        enemyBullets.splice(i, 1);
-        player2.lives--;
-        addExplosion(b.x, b.y, "#ff6a6a", 8);
-        addDamageNumber(player2.x + player2.w / 2, player2.y - 20, "P2 -1", true);
-        screenShake(0.2, 10);
-        playExplosion();
-        if (player2.lives <= 0) {
-          player2.active = false;
-          addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 DOWN!", true);
+    if (player2.invincibleTimer <= 0) {
+      for (let i = enemyBullets.length - 1; i >= 0; i--) {
+        if (rectsOverlap(player2, enemyBullets[i])) {
+          const b = enemyBullets[i];
+          enemyBullets.splice(i, 1);
+          player2.lives--;
+          player2.invincibleTimer = 1.5; // 1.5 seconds of invincibility
+          addExplosion(b.x, b.y, "#ff6a6a", 8);
+          addDamageNumber(player2.x + player2.w / 2, player2.y - 20, "P2 -1", true);
+          screenShake(0.2, 10);
+          playExplosion();
+          if (player2.lives <= 0) {
+            player2.active = false;
+            addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 DOWN!", true);
+          }
+          updateHud();
+          break; // Only take one hit per frame
         }
-        updateHud();
       }
     }
   }
@@ -2360,6 +2389,12 @@ function drawAlly() {
 
 function drawPlayer2() {
   if (!player2.active) return;
+  
+  // Blinking effect when invincible
+  if (player2.invincibleTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0) {
+    return; // Skip drawing every other frame for blink effect
+  }
+  
   ctx.save();
   const cx = player2.x + player2.w / 2;
   const cy = player2.y + player2.h / 2;
@@ -2376,11 +2411,12 @@ function drawPlayer2() {
   ctx.fill();
   ctx.globalAlpha = 1;
   
-  // Main ship (red color)
-  ctx.strokeStyle = player2.color;
-  ctx.lineWidth = 2;
-  ctx.shadowColor = player2.color;
-  ctx.shadowBlur = 12;
+  // Main ship (red color) - glow more when invincible
+  const isInvincible = player2.invincibleTimer > 0;
+  ctx.strokeStyle = isInvincible ? "#ffffff" : player2.color;
+  ctx.lineWidth = isInvincible ? 3 : 2;
+  ctx.shadowColor = isInvincible ? "#ffffff" : player2.color;
+  ctx.shadowBlur = isInvincible ? 20 : 12;
   ctx.beginPath();
   ctx.moveTo(cx, player2.y);
   ctx.lineTo(player2.x + player2.w, player2.y + player2.h);
@@ -2391,9 +2427,18 @@ function drawPlayer2() {
   
   // P2 indicator
   ctx.font = "bold 10px Consolas";
-  ctx.fillStyle = "#ff6a6a";
+  ctx.fillStyle = isInvincible ? "#ffffff" : "#ff6a6a";
   ctx.textAlign = "center";
   ctx.fillText("P2", cx, player2.y - 8);
+  
+  // Invincibility shield effect
+  if (isInvincible) {
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(cx, cy, player2.w + 5, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   
   ctx.restore();
 }
@@ -2815,31 +2860,123 @@ window.addEventListener("resize", () => {
 });
 
 // ============================================================================
-// TOUCH CONTROLS
+// TOUCH CONTROLS - Virtual Joystick
 // ============================================================================
-function setupTouchControl(element, key) {
-  if (!element) return;
-  element.addEventListener("touchstart", (e) => {
+
+// Joystick setup
+if (joystickZone) {
+  joystickZone.addEventListener("touchstart", (e) => {
     e.preventDefault();
-    state.touchKeys.add(key);
-  });
-  element.addEventListener("touchend", (e) => {
+    const touch = e.touches[0];
+    const rect = joystickBase.getBoundingClientRect();
+    joystick.active = true;
+    joystick.startX = rect.left + rect.width / 2;
+    joystick.startY = rect.top + rect.height / 2;
+    joystick.currentX = touch.clientX;
+    joystick.currentY = touch.clientY;
+    updateJoystick();
+    joystickStick.classList.add("active");
+  }, { passive: false });
+
+  joystickZone.addEventListener("touchmove", (e) => {
     e.preventDefault();
-    state.touchKeys.delete(key);
-  });
+    if (!joystick.active) return;
+    const touch = e.touches[0];
+    joystick.currentX = touch.clientX;
+    joystick.currentY = touch.clientY;
+    updateJoystick();
+  }, { passive: false });
+
+  const endJoystick = (e) => {
+    e.preventDefault();
+    joystick.active = false;
+    joystick.dx = 0;
+    joystick.dy = 0;
+    joystickStick.style.transform = "translate(-50%, -50%)";
+    joystickStick.classList.remove("active");
+    state.touchKeys.delete("left");
+    state.touchKeys.delete("right");
+    state.touchKeys.delete("up");
+    state.touchKeys.delete("down");
+  };
+
+  joystickZone.addEventListener("touchend", endJoystick, { passive: false });
+  joystickZone.addEventListener("touchcancel", endJoystick, { passive: false });
 }
 
-setupTouchControl(touchLeft, "left");
-setupTouchControl(touchRight, "right");
-setupTouchControl(touchUp, "up");
-setupTouchControl(touchDown, "down");
-setupTouchControl(touchFire, "fire");
+function updateJoystick() {
+  let dx = joystick.currentX - joystick.startX;
+  let dy = joystick.currentY - joystick.startY;
+  const distance = Math.hypot(dx, dy);
+  
+  // Clamp to max distance
+  if (distance > joystick.maxDistance) {
+    dx = (dx / distance) * joystick.maxDistance;
+    dy = (dy / distance) * joystick.maxDistance;
+  }
+  
+  // Update stick position
+  joystickStick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+  
+  // Normalize for input (-1 to 1)
+  joystick.dx = dx / joystick.maxDistance;
+  joystick.dy = dy / joystick.maxDistance;
+  
+  // Update touch keys based on joystick position
+  const threshold = 0.3;
+  
+  state.touchKeys.delete("left");
+  state.touchKeys.delete("right");
+  state.touchKeys.delete("up");
+  state.touchKeys.delete("down");
+  
+  if (joystick.dx < -threshold) state.touchKeys.add("left");
+  if (joystick.dx > threshold) state.touchKeys.add("right");
+  if (joystick.dy < -threshold) state.touchKeys.add("up");
+  if (joystick.dy > threshold) state.touchKeys.add("down");
+}
 
+// Fire button - continuous fire while held
+if (touchFire) {
+  let fireInterval = null;
+  
+  touchFire.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    touchFire.classList.add("active");
+    state.touchKeys.add("fire");
+    // Continuous fire at a fixed rate
+    fireInterval = setInterval(() => {
+      state.touchKeys.add("fire");
+    }, 50);
+  }, { passive: false });
+
+  const endFire = (e) => {
+    e.preventDefault();
+    touchFire.classList.remove("active");
+    state.touchKeys.delete("fire");
+    if (fireInterval) {
+      clearInterval(fireInterval);
+      fireInterval = null;
+    }
+  };
+
+  touchFire.addEventListener("touchend", endFire, { passive: false });
+  touchFire.addEventListener("touchcancel", endFire, { passive: false });
+  touchFire.addEventListener("touchleave", endFire, { passive: false });
+}
+
+// Weapon switch button
 if (touchWeapon) {
   touchWeapon.addEventListener("touchstart", (e) => {
     e.preventDefault();
+    touchWeapon.classList.add("active");
     switchWeapon();
-  });
+  }, { passive: false });
+
+  touchWeapon.addEventListener("touchend", (e) => {
+    e.preventDefault();
+    touchWeapon.classList.remove("active");
+  }, { passive: false });
 }
 
 // ============================================================================
