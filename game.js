@@ -24,10 +24,6 @@ const restartBtn = document.getElementById("restart-btn");
 const shopOverlayBtn = document.getElementById("shop-overlay-btn");
 const adminOverlayBtn = document.getElementById("admin-overlay-btn");
 const menuBtn = document.getElementById("menu-btn");
-const adOverlay = document.getElementById("ad-overlay");
-const adTimer = document.getElementById("ad-timer");
-const adSkip = document.getElementById("ad-skip");
-const freePowerupBtn = document.getElementById("free-powerup-btn");
 const adminFloatingBtn = document.getElementById("admin-floating-btn");
 const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start-btn");
@@ -959,133 +955,6 @@ function gameOver() {
   playGameOver();
   stopBgm();
   saveHighscore();
-  // Hide free powerup button
-  if (freePowerupBtn) freePowerupBtn.classList.remove("visible");
-}
-
-// ============================================================================
-// AD SYSTEM - Watch ads for free powerups
-// ============================================================================
-let adState = {
-  watching: false,
-  timeLeft: 0,
-  reward: null,
-  cooldown: 0, // Cooldown between ads
-};
-
-function showFreePowerupButton() {
-  // Show the button after 30 seconds of gameplay, with 60 second cooldown between uses
-  if (freePowerupBtn && state.running && !state.paused && !state.inMenu && adState.cooldown <= 0) {
-    freePowerupBtn.classList.add("visible");
-  }
-}
-
-function hideFreePowerupButton() {
-  if (freePowerupBtn) freePowerupBtn.classList.remove("visible");
-}
-
-function startWatchingAd() {
-  if (adState.watching || adState.cooldown > 0) return;
-  
-  adState.watching = true;
-  adState.timeLeft = 5; // 5 seconds ad
-  adState.reward = getRandomPowerupType();
-  
-  // Pause the game
-  state.paused = true;
-  hideFreePowerupButton();
-  
-  // Show ad overlay
-  if (adOverlay) adOverlay.classList.remove("hidden");
-  if (adSkip) adSkip.classList.add("hidden");
-  
-  updateAdTimer();
-}
-
-function updateAdTimer() {
-  if (!adState.watching) return;
-  
-  if (adTimer) {
-    adTimer.textContent = `Werbung endet in: ${Math.ceil(adState.timeLeft)}s`;
-  }
-  
-  if (adState.timeLeft <= 0) {
-    // Ad finished - give reward
-    finishAd();
-  } else if (adState.timeLeft <= 2) {
-    // Show skip button after 3 seconds
-    if (adSkip) adSkip.classList.remove("hidden");
-  }
-}
-
-function finishAd() {
-  adState.watching = false;
-  adState.cooldown = 60; // 60 second cooldown
-  
-  // Hide ad overlay
-  if (adOverlay) adOverlay.classList.add("hidden");
-  
-  // Resume game
-  state.paused = false;
-  
-  // Give the reward powerup
-  giveFreePowerup(adState.reward);
-  
-  // Show notification
-  addDamageNumber(state.width / 2, state.height / 2, `FREE ${adState.reward.toUpperCase()}!`, false);
-  playPickup();
-}
-
-function skipAd() {
-  if (adState.timeLeft <= 2) {
-    finishAd();
-  }
-}
-
-function getRandomPowerupType() {
-  const types = ["rapid", "shield", "life", "speed", "spread"];
-  return types[Math.floor(Math.random() * types.length)];
-}
-
-function giveFreePowerup(type) {
-  switch (type) {
-    case "rapid":
-      if (state.rapid > 0) {
-        state.rapid = Math.min(120, state.rapid + 30);
-        state.rapidLevel = Math.min(20, state.rapidLevel + 1);
-      } else {
-        state.rapid = 60;
-        state.rapidLevel = 1;
-      }
-      break;
-    case "shield":
-      state.shield = Math.min(120, state.shield + 60);
-      break;
-    case "life":
-      state.lives++;
-      break;
-    case "speed":
-      state.speed = Math.min(120, state.speed + 60);
-      break;
-    case "spread":
-      state.spread = Math.min(120, state.spread + 60);
-      break;
-  }
-  updateHud();
-}
-
-function updateAdCooldown(delta) {
-  if (adState.cooldown > 0) {
-    adState.cooldown -= delta;
-    if (adState.cooldown <= 0) {
-      showFreePowerupButton();
-    }
-  }
-  
-  if (adState.watching) {
-    adState.timeLeft -= delta;
-    updateAdTimer();
-  }
 }
 
 function openMenu() {
@@ -1095,7 +964,6 @@ function openMenu() {
   menu.classList.remove("hidden");
   overlay.classList.add("hidden");
   if (adminFloatingBtn) adminFloatingBtn.classList.add("hidden");
-  if (freePowerupBtn) freePowerupBtn.classList.remove("visible");
 }
 
 function startGame() {
@@ -3129,16 +2997,10 @@ function tick(timestamp) {
     updateSpawns(delta);
     updateEffects(slowMoActive ? delta / state.slowMoFactor : delta);
     updateRespawns(delta);
-    updateAdCooldown(delta);
     updateNukeCooldown(delta);
     checkCollisions();
     checkPowerupPickup();
     updateHud();
-    
-    // Show free powerup button after 30 seconds of gameplay
-    if (!freePowerupBtn?.classList.contains("visible") && adState.cooldown <= 0) {
-      showFreePowerupButton();
-    }
   }
 
   // Apply screen shake
@@ -4129,14 +3991,6 @@ menuBtn?.addEventListener("click", () => {
   if (restartBtn) restartBtn.classList.add("hidden");
   openMenu();
 });
-
-// Ad system event listeners
-freePowerupBtn?.addEventListener("click", () => startWatchingAd());
-freePowerupBtn?.addEventListener("touchstart", (e) => {
-  e.preventDefault();
-  startWatchingAd();
-});
-adSkip?.addEventListener("click", () => skipAd());
 
 // Floating admin button
 adminFloatingBtn?.addEventListener("click", () => toggleAdmin(true));
