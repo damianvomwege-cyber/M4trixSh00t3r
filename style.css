@@ -58,6 +58,22 @@ body {
   color: #7fd9b1;
 }
 
+.p2-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: #ff9a9a;
+}
+
+.p2-stats.hidden {
+  display: none;
+}
+
+#p2-lives {
+  color: #ff6a6a;
+  font-weight: bold;
+}
+
 #combo {
   color: var(--matrix-cyan);
   font-weight: bold;

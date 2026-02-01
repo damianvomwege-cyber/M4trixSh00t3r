@@ -20,7 +20,10 @@ const overlayTitle = document.getElementById("overlay-title");
 const overlaySubtitle = document.getElementById("overlay-subtitle");
 const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start-btn");
+const multiplayerBtn = document.getElementById("multiplayer-btn");
 const storyBtn = document.getElementById("story-btn");
+const p2StatsEl = document.getElementById("p2-stats");
+const p2LivesEl = document.getElementById("p2-lives");
 const achievementsBtn = document.getElementById("achievements-btn");
 const highscoreBtn = document.getElementById("highscore-btn");
 const adminBtn = document.getElementById("admin-btn");
@@ -151,6 +154,7 @@ const state = {
   inMenu: true,
   inShop: false,
   inStory: false,
+  multiplayer: false,
   score: 0,
   credits: 0,
   lives: 3,
@@ -247,6 +251,23 @@ const ally = {
   lives: 3,
 };
 
+// Player 2 for local multiplayer
+const player2 = {
+  x: 0,
+  y: 0,
+  w: 26,
+  h: 26,
+  speed: 280,
+  baseCooldown: 0.18,
+  cooldown: 0,
+  color: "#ff6a6a",
+  active: false,
+  lives: 3,
+};
+
+const p2Bullets = [];
+const p2Keys = new Set();
+
 let highscores = JSON.parse(localStorage.getItem("m4trix_highscores") || "[]");
 let unlockedAchievements = JSON.parse(localStorage.getItem("m4trix_achievements") || "[]");
 let ownedUpgrades = JSON.parse(localStorage.getItem("m4trix_upgrades") || "[]");
@@ -319,6 +340,11 @@ function updateHud() {
     bossPhaseEl.textContent = `Phase ${state.currentBoss.phase}`;
   } else {
     bossHpBar.classList.add("hidden");
+  }
+  
+  // Player 2 HUD
+  if (state.multiplayer && p2LivesEl) {
+    p2LivesEl.textContent = `P2 Lives: ${player2.active ? player2.lives : "0"}`;
   }
 }
 
@@ -775,6 +801,7 @@ function openMenu() {
 
 function startGame() {
   state.inMenu = false;
+  state.multiplayer = false;
   menu.classList.add("hidden");
   reset();
   initAudio();
@@ -782,6 +809,14 @@ function startGame() {
   if (STORY.find(s => s.chapter === 1) && state.storyChapter === 0) {
     startStory(1);
   }
+}
+
+function startMultiplayer() {
+  state.inMenu = false;
+  state.multiplayer = true;
+  menu.classList.add("hidden");
+  reset();
+  initAudio();
 }
 
 function reset() {
@@ -826,6 +861,23 @@ function reset() {
   ally.lives = config.aiLives;
   player.x = state.width / 2 - player.w / 2;
   player.y = state.height - player.h - 60;
+  
+  // Multiplayer Player 2
+  p2Bullets.length = 0;
+  player2.active = state.multiplayer;
+  player2.lives = 3;
+  player2.cooldown = 0;
+  player2.x = state.width / 2 - player2.w / 2 + 60;
+  player2.y = state.height - player2.h - 60;
+  
+  if (state.multiplayer) {
+    p2StatsEl.classList.remove("hidden");
+    // Disable AI in multiplayer
+    state.aiEnabled = false;
+    ally.active = false;
+  } else {
+    p2StatsEl.classList.add("hidden");
+  }
   
   updateHud();
 }
@@ -1263,10 +1315,18 @@ function updatePlayer(delta) {
   let dy = 0;
   const keys = new Set([...state.keys, ...state.touchKeys]);
   
-  if (keys.has("ArrowLeft") || keys.has("KeyA") || keys.has("left")) dx -= 1;
-  if (keys.has("ArrowRight") || keys.has("KeyD") || keys.has("right")) dx += 1;
-  if (keys.has("ArrowUp") || keys.has("KeyW") || keys.has("up")) dy -= 1;
-  if (keys.has("ArrowDown") || keys.has("KeyS") || keys.has("down")) dy += 1;
+  // In multiplayer, P1 uses WASD only
+  if (state.multiplayer) {
+    if (keys.has("KeyA")) dx -= 1;
+    if (keys.has("KeyD")) dx += 1;
+    if (keys.has("KeyW")) dy -= 1;
+    if (keys.has("KeyS")) dy += 1;
+  } else {
+    if (keys.has("ArrowLeft") || keys.has("KeyA") || keys.has("left")) dx -= 1;
+    if (keys.has("ArrowRight") || keys.has("KeyD") || keys.has("right")) dx += 1;
+    if (keys.has("ArrowUp") || keys.has("KeyW") || keys.has("up")) dy -= 1;
+    if (keys.has("ArrowDown") || keys.has("KeyS") || keys.has("down")) dy += 1;
+  }
 
   const length = Math.hypot(dx, dy) || 1;
   const speedBoost = state.speed > 0 ? 1.45 : 1;
@@ -1286,6 +1346,49 @@ function updatePlayer(delta) {
   if (state.rapid === 0) state.rapidLevel = 0;
   
   updateCombo(delta);
+}
+
+function updatePlayer2(delta) {
+  if (!player2.active) return;
+  
+  let dx = 0;
+  let dy = 0;
+  
+  // P2 uses Arrow Keys
+  if (p2Keys.has("ArrowLeft")) dx -= 1;
+  if (p2Keys.has("ArrowRight")) dx += 1;
+  if (p2Keys.has("ArrowUp")) dy -= 1;
+  if (p2Keys.has("ArrowDown")) dy += 1;
+
+  const length = Math.hypot(dx, dy) || 1;
+  player2.x += (dx / length) * player2.speed * delta;
+  player2.y += (dy / length) * player2.speed * delta;
+  player2.x = Math.max(0, Math.min(state.width - player2.w, player2.x));
+  player2.y = Math.max(60, Math.min(state.height - player2.h - 20, player2.y));
+
+  // P2 shoots with Enter or Numpad0
+  if (p2Keys.has("Enter") || p2Keys.has("Numpad0")) player2Shoot();
+  player2.cooldown = Math.max(0, player2.cooldown - delta);
+}
+
+function player2Shoot() {
+  if (!player2.active || player2.cooldown > 0) return;
+  
+  const cx = player2.x + player2.w / 2;
+  const cy = player2.y;
+  
+  p2Bullets.push({
+    x: cx - 3,
+    y: cy - 6,
+    w: 6,
+    h: 12,
+    speed: 520,
+    damage: 1 * state.damageMultiplier,
+    color: "#ff6a6a",
+  });
+  
+  player2.cooldown = player2.baseCooldown;
+  playShoot();
 }
 
 function updateAlly(delta) {
@@ -1343,6 +1446,15 @@ function updateBullets(delta) {
     b.y -= b.speed * delta;
     if (b.angle) b.x += b.angle * b.speed * delta;
     if (b.y + b.h < 0 || b.x < -50 || b.x > state.width + 50) bullets.splice(i, 1);
+  }
+}
+
+function updateP2Bullets(delta) {
+  for (let i = p2Bullets.length - 1; i >= 0; i--) {
+    const b = p2Bullets[i];
+    if (Math.random() < 0.3) addTrail(b.x + b.w / 2, b.y + b.h, "#ff6a6a");
+    b.y -= b.speed * delta;
+    if (b.y + b.h < 0) p2Bullets.splice(i, 1);
   }
 }
 
@@ -1816,12 +1928,53 @@ function checkCollisions() {
       }
     }
   }
+  
+  // Player 2 vs enemies
+  if (player2.active) {
+    for (let i = enemies.length - 1; i >= 0; i--) {
+      const enemy = enemies[i];
+      if (enemy.type === "boss") continue;
+      if (rectsOverlap(player2, enemy)) {
+        player2.lives--;
+        enemies.splice(i, 1);
+        addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff6a6a", 15);
+        addExplosion(player2.x + player2.w / 2, player2.y + player2.h / 2, "#ff6a6a", 10);
+        addDamageNumber(player2.x + player2.w / 2, player2.y - 20, "P2 -1", true);
+        screenShake(0.3, 15);
+        playExplosion();
+        if (player2.lives <= 0) {
+          player2.active = false;
+          addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 DOWN!", true);
+        }
+        updateHud();
+      }
+    }
+    
+    // Player 2 vs enemy bullets
+    for (let i = enemyBullets.length - 1; i >= 0; i--) {
+      if (rectsOverlap(player2, enemyBullets[i])) {
+        const b = enemyBullets[i];
+        enemyBullets.splice(i, 1);
+        player2.lives--;
+        addExplosion(b.x, b.y, "#ff6a6a", 8);
+        addDamageNumber(player2.x + player2.w / 2, player2.y - 20, "P2 -1", true);
+        screenShake(0.2, 10);
+        playExplosion();
+        if (player2.lives <= 0) {
+          player2.active = false;
+          addDamageNumber(player2.x + player2.w / 2, player2.y, "P2 DOWN!", true);
+        }
+        updateHud();
+      }
+    }
+  }
 }
 
 function checkBulletHits(enemy, enemyIdx) {
   const bulletArrays = [
     { arr: bullets, remove: true },
     { arr: allyBullets, remove: true },
+    { arr: p2Bullets, remove: true },
     { arr: lasers, remove: false },
     { arr: rockets, remove: true, explode: true },
     { arr: homingMissiles, remove: true },
@@ -1928,6 +2081,7 @@ function checkBulletHits(enemy, enemyIdx) {
 function checkPowerupPickup() {
   const collectors = [player];
   if (ally.active) collectors.push(ally);
+  if (player2.active) collectors.push(player2);
   
   const colors = { life: "#ff4488", shield: "#00e5ff", speed: "#ffcc00", rapid: "#00ff9a", spread: "#b000ff" };
   const names = { life: "+1 LIFE", shield: "SHIELD!", speed: "SPEED!", rapid: "RAPID!", spread: "SPREAD!" };
@@ -2110,6 +2264,56 @@ function drawAlly() {
   ctx.closePath();
   ctx.stroke();
   ctx.restore();
+}
+
+function drawPlayer2() {
+  if (!player2.active) return;
+  ctx.save();
+  const cx = player2.x + player2.w / 2;
+  const cy = player2.y + player2.h / 2;
+  
+  // Engine flame (red/orange)
+  const flameHeight = 8 + Math.random() * 6;
+  ctx.fillStyle = "#ff6a00";
+  ctx.globalAlpha = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(player2.x + player2.w * 0.3, player2.y + player2.h);
+  ctx.lineTo(cx, player2.y + player2.h + flameHeight);
+  ctx.lineTo(player2.x + player2.w * 0.7, player2.y + player2.h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  
+  // Main ship (red color)
+  ctx.strokeStyle = player2.color;
+  ctx.lineWidth = 2;
+  ctx.shadowColor = player2.color;
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.moveTo(cx, player2.y);
+  ctx.lineTo(player2.x + player2.w, player2.y + player2.h);
+  ctx.lineTo(cx, player2.y + player2.h * 0.65);
+  ctx.lineTo(player2.x, player2.y + player2.h);
+  ctx.closePath();
+  ctx.stroke();
+  
+  // P2 indicator
+  ctx.font = "bold 10px Consolas";
+  ctx.fillStyle = "#ff6a6a";
+  ctx.textAlign = "center";
+  ctx.fillText("P2", cx, player2.y - 8);
+  
+  ctx.restore();
+}
+
+function drawP2Bullets() {
+  ctx.fillStyle = "#ff6a6a";
+  ctx.shadowColor = "#ff6a6a";
+  ctx.shadowBlur = 8;
+  for (const b of p2Bullets) {
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+  }
+  ctx.shadowBlur = 0;
 }
 
 function drawBullets() {
@@ -2353,6 +2557,8 @@ function tick(timestamp) {
     updateHomingMissiles(delta);
     updateAlly(delta);
     updateAllyBullets(delta);
+    updatePlayer2(delta);
+    updateP2Bullets(delta);
     updateEnemyBullets(delta);
     updateEnemies(delta);
     updatePowerups(delta);
@@ -2383,6 +2589,8 @@ function tick(timestamp) {
   drawEnemies();
   drawPowerups();
   drawAlly();
+  drawPlayer2();
+  drawP2Bullets();
   drawPlayer();
   drawLightnings();
   drawParticles();
@@ -2473,15 +2681,29 @@ window.addEventListener("keydown", (event) => {
   }
   
   if (event.code === "Space") event.preventDefault();
-  state.keys.add(event.code);
+  if (event.code === "Enter") event.preventDefault();
+  
+  // In multiplayer mode, separate P1 and P2 keys
+  if (state.multiplayer) {
+    const p2KeySet = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Numpad0"];
+    if (p2KeySet.includes(event.code)) {
+      p2Keys.add(event.code);
+    } else {
+      state.keys.add(event.code);
+    }
+  } else {
+    state.keys.add(event.code);
+  }
 });
 
 window.addEventListener("keyup", (event) => {
   state.keys.delete(event.code);
+  p2Keys.delete(event.code);
 });
 
 window.addEventListener("blur", () => {
   state.keys.clear();
+  p2Keys.clear();
 });
 
 window.addEventListener("resize", () => {
@@ -2640,6 +2862,7 @@ function resetAllProgress() {
 // EVENT LISTENERS
 // ============================================================================
 startBtn?.addEventListener("click", () => startGame());
+multiplayerBtn?.addEventListener("click", () => startMultiplayer());
 storyBtn?.addEventListener("click", () => { startStory(1); });
 achievementsBtn?.addEventListener("click", () => { renderAchievements(); achievementsPanel.classList.remove("hidden"); });
 highscoreBtn?.addEventListener("click", () => { renderHighscores(); highscoresPanel.classList.remove("hidden"); });

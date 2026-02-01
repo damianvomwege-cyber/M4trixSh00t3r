@@ -10,13 +10,21 @@ A Matrix-themed 2D space shooter built with vanilla JavaScript and HTML5 Canvas.
 
 Open `index.html` in your browser - no server required!
 
-**Controls:**
+### Single Player Controls
 - `W A S D` or `Arrow Keys` - Move
 - `Space` - Shoot
 - `1-4` - Switch Weapons
 - `P` - Pause
 - `M` - Menu
 - `O` - Admin Panel
+
+### 👥 Local Multiplayer Controls
+Play with a friend on the same keyboard!
+
+| Player | Move | Shoot |
+|--------|------|-------|
+| **P1** (Green) | `W A S D` | `Space` |
+| **P2** (Red) | `Arrow Keys` | `Enter` or `Numpad 0` |
 
 ## ✨ Features
 
@@ -52,6 +60,12 @@ Unlock at Level 2! An AI companion that:
 - Fights alongside you
 - Collects power-ups
 - Evades enemies
+
+### 👥 Local Multiplayer
+Couch co-op mode for 2 players:
+- Both players share the screen
+- Separate life counts
+- Work together to beat the bosses!
 
 ### 🏪 Shop System
 Earn credits by defeating enemies and buy:
