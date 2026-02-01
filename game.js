@@ -162,6 +162,11 @@ const WEAPONS = [
   { id: 2, name: "Laser", color: "#ff00ff", speed: 800, damage: 2, cooldown: 0.25, spread: 0, unlocked: false, price: 500, desc: "Piercing beam" },
   { id: 3, name: "Rockets", color: "#ff6a00", speed: 350, damage: 5, cooldown: 0.5, spread: 0, unlocked: false, price: 1000, desc: "Explosive damage" },
   { id: 4, name: "Homing", color: "#b000ff", speed: 400, damage: 3, cooldown: 0.35, spread: 0, unlocked: false, price: 2000, desc: "Seeks targets" },
+  { id: 5, name: "Shotgun", color: "#ffaa00", speed: 450, damage: 1, cooldown: 0.6, spread: 7, unlocked: false, price: 800, desc: "7 bullet spread" },
+  { id: 6, name: "Minigun", color: "#00ff00", speed: 600, damage: 0.5, cooldown: 0.05, spread: 0, unlocked: false, price: 1500, desc: "Super rapid fire" },
+  { id: 7, name: "Plasma", color: "#00ffff", speed: 300, damage: 8, cooldown: 0.8, spread: 0, unlocked: false, price: 2500, desc: "Heavy plasma ball" },
+  { id: 8, name: "Chain", color: "#ffff00", speed: 550, damage: 2, cooldown: 0.4, spread: 0, unlocked: false, price: 3000, desc: "Chain lightning" },
+  { id: 9, name: "Freeze", color: "#88ccff", speed: 400, damage: 1, cooldown: 0.5, spread: 0, unlocked: false, price: 3500, desc: "Slows enemies" },
 ];
 
 // ============================================================================
@@ -844,6 +849,101 @@ function playRocket() {
   osc.stop(start + 0.3);
 }
 
+function playShotgun() {
+  if (!audioCtx || !audioState.enabled) return;
+  const start = audioCtx.currentTime;
+  // Bass thump
+  const osc1 = audioCtx.createOscillator();
+  const gain1 = audioCtx.createGain();
+  osc1.type = "triangle";
+  osc1.frequency.setValueAtTime(150, start);
+  osc1.frequency.exponentialRampToValueAtTime(40, start + 0.15);
+  gain1.gain.setValueAtTime(0.25 * audioState.sfxVolume, start);
+  gain1.gain.exponentialRampToValueAtTime(0.0001, start + 0.15);
+  osc1.connect(gain1);
+  gain1.connect(audioCtx.destination);
+  osc1.start(start);
+  osc1.stop(start + 0.15);
+  // High crack
+  const osc2 = audioCtx.createOscillator();
+  const gain2 = audioCtx.createGain();
+  osc2.type = "sawtooth";
+  osc2.frequency.setValueAtTime(1500, start);
+  osc2.frequency.exponentialRampToValueAtTime(500, start + 0.08);
+  gain2.gain.setValueAtTime(0.1 * audioState.sfxVolume, start);
+  gain2.gain.exponentialRampToValueAtTime(0.0001, start + 0.08);
+  osc2.connect(gain2);
+  gain2.connect(audioCtx.destination);
+  osc2.start(start);
+  osc2.stop(start + 0.08);
+}
+
+function playMinigun() {
+  if (!audioCtx || !audioState.enabled) return;
+  const start = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(800 + Math.random() * 200, start);
+  osc.frequency.exponentialRampToValueAtTime(400, start + 0.03);
+  gain.gain.setValueAtTime(0.06 * audioState.sfxVolume, start);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.03);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(start);
+  osc.stop(start + 0.03);
+}
+
+function playPlasma() {
+  if (!audioCtx || !audioState.enabled) return;
+  const start = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(300, start);
+  osc.frequency.linearRampToValueAtTime(600, start + 0.1);
+  osc.frequency.linearRampToValueAtTime(200, start + 0.3);
+  gain.gain.setValueAtTime(0.15 * audioState.sfxVolume, start);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.3);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(start);
+  osc.stop(start + 0.3);
+}
+
+function playChain() {
+  if (!audioCtx || !audioState.enabled) return;
+  const start = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(2000, start);
+  osc.frequency.exponentialRampToValueAtTime(500, start + 0.1);
+  osc.frequency.exponentialRampToValueAtTime(3000, start + 0.15);
+  gain.gain.setValueAtTime(0.1 * audioState.sfxVolume, start);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(start);
+  osc.stop(start + 0.2);
+}
+
+function playFreeze() {
+  if (!audioCtx || !audioState.enabled) return;
+  const start = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(1800, start);
+  osc.frequency.linearRampToValueAtTime(400, start + 0.2);
+  gain.gain.setValueAtTime(0.08 * audioState.sfxVolume, start);
+  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(start);
+  osc.stop(start + 0.2);
+}
+
 function playExplosion() {
   if (!audioCtx || !audioState.enabled) return;
   const start = audioCtx.currentTime;
@@ -1277,6 +1377,26 @@ function shoot() {
       fireHoming(cx, cy, weapon);
       playShoot();
       break;
+    case 5: // Shotgun
+      fireShotgun(cx, cy, weapon);
+      playShotgun();
+      break;
+    case 6: // Minigun
+      fireMinigun(cx, cy, weapon);
+      playMinigun();
+      break;
+    case 7: // Plasma
+      firePlasma(cx, cy, weapon);
+      playPlasma();
+      break;
+    case 8: // Chain Lightning
+      fireChain(cx, cy, weapon);
+      playChain();
+      break;
+    case 9: // Freeze
+      fireFreeze(cx, cy, weapon);
+      playFreeze();
+      break;
   }
 }
 
@@ -1330,6 +1450,87 @@ function fireHoming(x, y, weapon) {
     color: weapon.color,
     target: null,
     angle: -Math.PI / 2,
+  });
+}
+
+function fireShotgun(x, y, weapon) {
+  // Fire 7 bullets in a spread pattern
+  const numBullets = weapon.spread || 7;
+  const spreadAngle = 0.5; // Total spread in radians
+  for (let i = 0; i < numBullets; i++) {
+    const angle = -spreadAngle / 2 + (spreadAngle / (numBullets - 1)) * i;
+    bullets.push({
+      x: x - 3,
+      y: y - 6,
+      w: 5,
+      h: 8,
+      speed: weapon.speed + (Math.random() - 0.5) * 100,
+      damage: weapon.damage * state.damageMultiplier,
+      color: weapon.color,
+      angle: angle,
+    });
+  }
+}
+
+function fireMinigun(x, y, weapon) {
+  // Slight random spread for minigun
+  const spread = (Math.random() - 0.5) * 0.15;
+  bullets.push({
+    x: x - 2 + (Math.random() - 0.5) * 8,
+    y: y - 6,
+    w: 4,
+    h: 8,
+    speed: weapon.speed,
+    damage: weapon.damage * state.damageMultiplier,
+    color: weapon.color,
+    angle: spread,
+  });
+}
+
+function firePlasma(x, y, weapon) {
+  // Large slow plasma ball
+  bullets.push({
+    x: x - 8,
+    y: y - 10,
+    w: 16,
+    h: 16,
+    speed: weapon.speed,
+    damage: weapon.damage * state.damageMultiplier,
+    color: weapon.color,
+    isPlasma: true,
+    explosionRadius: 40,
+  });
+}
+
+function fireChain(x, y, weapon) {
+  // Chain lightning bullet that jumps between enemies
+  bullets.push({
+    x: x - 3,
+    y: y - 6,
+    w: 6,
+    h: 10,
+    speed: weapon.speed,
+    damage: weapon.damage * state.damageMultiplier,
+    color: weapon.color,
+    isChain: true,
+    chainCount: 3, // Can hit 3 additional enemies
+    hitEnemies: [],
+  });
+}
+
+function fireFreeze(x, y, weapon) {
+  // Freeze bullet that slows enemies
+  bullets.push({
+    x: x - 4,
+    y: y - 8,
+    w: 8,
+    h: 12,
+    speed: weapon.speed,
+    damage: weapon.damage * state.damageMultiplier,
+    color: weapon.color,
+    isFreeze: true,
+    slowDuration: 3, // Seconds to slow enemy
+    slowAmount: 0.4, // Slow to 40% speed
   });
 }
 
@@ -1944,6 +2145,17 @@ function updateEnemies(delta) {
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     
+    // Handle frozen state
+    if (enemy.frozen) {
+      enemy.frozenTimer -= delta;
+      if (enemy.frozenTimer <= 0) {
+        enemy.frozen = false;
+        enemy.speed = enemy.originalSpeed || enemy.speed;
+        delete enemy.frozenTimer;
+        delete enemy.originalSpeed;
+      }
+    }
+    
     if (enemy.type === "boss") {
       updateBoss(enemy, delta);
       continue;
@@ -2412,7 +2624,49 @@ function checkBulletHits(enemy, enemyIdx) {
     for (let j = arr.length - 1; j >= 0; j--) {
       const b = arr[j];
       if (rectsOverlap(b, enemy)) {
-        if (remove) arr.splice(j, 1);
+        // Special bullet handling
+        let shouldRemove = remove;
+        
+        // Plasma explosion
+        if (b.isPlasma) {
+          addBigExplosion(b.x + b.w / 2, b.y + b.h / 2, b.explosionRadius || 40);
+          addExplosion(b.x + b.w / 2, b.y + b.h / 2, "#00ffff", 25);
+          playExplosion();
+        }
+        
+        // Chain lightning - jump to nearby enemies
+        if (b.isChain && b.chainCount > 0) {
+          const hitEnemy = enemy;
+          const nearbyEnemy = enemies.find(e => 
+            e !== hitEnemy && 
+            !b.hitEnemies?.includes(e) &&
+            Math.abs(e.x - hitEnemy.x) < 150 && 
+            Math.abs(e.y - hitEnemy.y) < 150
+          );
+          if (nearbyEnemy) {
+            // Create chain to next enemy
+            addLightning(hitEnemy.x + hitEnemy.w / 2, hitEnemy.y + hitEnemy.h / 2, 
+                        nearbyEnemy.x + nearbyEnemy.w / 2, nearbyEnemy.y + nearbyEnemy.h / 2, "#ffff00");
+            nearbyEnemy.hp -= (b.damage || 2) * 0.8;
+            b.hitEnemies = b.hitEnemies || [];
+            b.hitEnemies.push(hitEnemy);
+            b.chainCount--;
+            addDamageNumber(nearbyEnemy.x + nearbyEnemy.w / 2, nearbyEnemy.y, "CHAIN!", false);
+            playChain();
+          }
+        }
+        
+        // Freeze effect - slow enemy
+        if (b.isFreeze && enemy.type !== "boss") {
+          enemy.frozen = true;
+          enemy.frozenTimer = b.slowDuration || 3;
+          enemy.originalSpeed = enemy.speed;
+          enemy.speed *= (b.slowAmount || 0.4);
+          addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#88ccff", 12);
+          addDamageNumber(enemy.x + enemy.w / 2, enemy.y, "FROZEN!", false);
+        }
+        
+        if (shouldRemove) arr.splice(j, 1);
         
         if (explode) {
           addBigExplosion(b.x + b.w / 2, b.y + b.h / 2, b.explosionRadius || 60);
@@ -2801,8 +3055,46 @@ function drawBullets() {
   for (const b of bullets) {
     ctx.fillStyle = b.color || "#7fffe3";
     ctx.shadowColor = b.color || "#7fffe3";
-    ctx.shadowBlur = 8;
-    ctx.fillRect(b.x, b.y, b.w, b.h);
+    
+    if (b.isPlasma) {
+      // Large glowing plasma ball
+      ctx.shadowBlur = 25;
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w / 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Inner glow
+      ctx.fillStyle = "#ffffff";
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath();
+      ctx.arc(b.x + b.w / 2, b.y + b.h / 2, b.w / 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    } else if (b.isChain) {
+      // Chain lightning bullet with electric effect
+      ctx.shadowBlur = 15;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+      // Electric sparks
+      if (Math.random() < 0.3) {
+        ctx.strokeStyle = "#ffff00";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(b.x + b.w / 2, b.y);
+        ctx.lineTo(b.x + b.w / 2 + (Math.random() - 0.5) * 20, b.y + (Math.random() - 0.5) * 20);
+        ctx.stroke();
+      }
+    } else if (b.isFreeze) {
+      // Ice crystal effect
+      ctx.shadowBlur = 12;
+      ctx.save();
+      ctx.translate(b.x + b.w / 2, b.y + b.h / 2);
+      ctx.rotate(Date.now() / 200);
+      ctx.fillRect(-b.w / 2, -b.h / 2, b.w, b.h);
+      ctx.restore();
+    } else {
+      // Normal bullet
+      ctx.shadowBlur = 8;
+      ctx.fillRect(b.x, b.y, b.w, b.h);
+    }
   }
   ctx.shadowBlur = 0;
 }
@@ -2884,6 +3176,13 @@ function drawEnemies() {
   for (const enemy of enemies) {
     ctx.save();
     
+    // Frozen effect
+    if (enemy.frozen) {
+      ctx.globalAlpha = 0.7;
+      ctx.fillStyle = "rgba(136, 204, 255, 0.3)";
+      ctx.fillRect(enemy.x - 2, enemy.y - 2, enemy.w + 4, enemy.h + 4);
+    }
+    
     if (enemy.type === "boss") {
       // Boss drawing
       ctx.strokeStyle = enemy.phase === 3 ? "#ff00ff" : enemy.phase === 2 ? "#ff6a00" : "#ff2255";
@@ -2898,10 +3197,12 @@ function drawEnemies() {
       ctx.fillRect(enemy.x + 10, enemy.y + 10, enemy.w - 20, enemy.h - 20);
       ctx.globalAlpha = 1;
     } else {
-      // Normal enemy
-      ctx.strokeStyle = enemy.type === "shielded" ? "#00e5ff" : 
+      // Normal enemy - frozen enemies get blue tint
+      const baseColor = enemy.frozen ? "#88ccff" : 
+                        enemy.type === "shielded" ? "#00e5ff" : 
                         enemy.type === "shooter" ? "#ff6a00" : 
                         enemy.type === "zigzag" ? "#b000ff" : "#2de38b";
+      ctx.strokeStyle = baseColor;
       ctx.lineWidth = 2;
       ctx.shadowColor = ctx.strokeStyle;
       ctx.shadowBlur = 10;
@@ -3132,8 +3433,8 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   
-  // Weapon switching
-  if (event.key >= "1" && event.key <= "4") {
+  // Weapon switching (1-9)
+  if (event.key >= "1" && event.key <= "9") {
     const weaponId = parseInt(event.key);
     const weapon = WEAPONS.find(w => w.id === weaponId);
     if (weapon && weapon.unlocked) {
