@@ -104,10 +104,12 @@ const audioState = {
 };
 
 // ============================================================================
-// ONLINE MULTIPLAYER (PeerJS)
+// ONLINE MULTIPLAYER (Socket.io)
 // ============================================================================
-let peer = null;
-let peerConnection = null;
+// Server URL - Change this to your deployed server URL
+const SERVER_URL = "https://m4trix-server.onrender.com"; // Will be updated after deployment
+
+let socket = null;
 const netState = {
   connected: false,
   isHost: false,
@@ -1060,8 +1062,7 @@ function shoot() {
   
   // Send network bullet in online mode
   if (state.onlineMultiplayer && netState.connected) {
-    sendNetworkData({
-      type: "bullet_fired",
+    sendNetworkData("bullet_fired", {
       x: player.x + player.w / 2 - 3,
       y: player.y - 6,
     });
@@ -1427,8 +1428,7 @@ function player2Shoot() {
   
   // In online mode, guest sends bullet to host
   if (state.onlineMultiplayer && netState.connected && !netState.isHost) {
-    sendNetworkData({
-      type: "bullet_fired",
+    sendNetworkData("bullet_fired", {
       x: player2.x + player2.w / 2 - 3,
       y: player2.y - 6,
     });
@@ -2930,187 +2930,67 @@ function resetAllProgress() {
 }
 
 // ============================================================================
-// ONLINE LOBBY FUNCTIONS
+// ONLINE LOBBY FUNCTIONS (Socket.io)
 // ============================================================================
-function generateLobbyCode() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let code = "";
-  for (let i = 0; i < 6; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
-  }
-  return code;
-}
-
-function initPeer(id = null) {
+function connectToServer() {
   return new Promise((resolve, reject) => {
-    // ICE servers for better NAT traversal across different networks
-    const options = { 
-      debug: 1,
-      config: {
-        iceServers: [
-          // STUN servers
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:global.stun.twilio.com:3478" },
-          
-          // Free TURN servers from Open Relay Project
-          {
-            urls: "turn:openrelay.metered.ca:80",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-          },
-          {
-            urls: "turn:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-          },
-          {
-            urls: "turn:openrelay.metered.ca:443?transport=tcp",
-            username: "openrelayproject",
-            credential: "openrelayproject"
-          },
-          
-          // Alternative free TURN servers
-          {
-            urls: "turn:relay.metered.ca:80",
-            username: "free",
-            credential: "free"
-          },
-          {
-            urls: "turn:relay.metered.ca:443",
-            username: "free", 
-            credential: "free"
-          },
-          
-          // Numb TURN server (free)
-          {
-            urls: "turn:numb.viagenie.ca",
-            username: "webrtc@live.com",
-            credential: "muazkh"
-          }
-        ],
-        iceCandidatePoolSize: 10
-      }
-    };
+    console.log("Connecting to server:", SERVER_URL);
     
-    console.log("Initializing peer with ID:", id || "random");
-    peer = id ? new Peer(id, options) : new Peer(options);
-    
-    peer.on("open", (peerId) => {
-      console.log("✅ Peer connected with ID:", peerId);
-      resolve(peerId);
+    socket = io(SERVER_URL, {
+      transports: ['websocket', 'polling'],
+      timeout: 10000,
+      reconnection: true,
+      reconnectionAttempts: 5
     });
     
-    peer.on("error", (err) => {
-      console.error("❌ Peer error:", err.type, err.message);
-      
-      // Handle peer-unavailable error (target not found)
-      if (err.type === "peer-unavailable") {
-        console.log("Target peer not found!");
-        showJoinError("Lobby nicht gefunden! Code falsch oder Host offline.");
-        return; // Don't reject, just show error
-      }
-      
-      if (err.type === "unavailable-id") {
-        reject(new Error("Code bereits in Benutzung"));
-      } else if (err.type === "network") {
-        reject(new Error("Netzwerk-Fehler"));
-      } else if (err.type === "server-error") {
-        reject(new Error("Server nicht erreichbar"));
-      } else {
-        reject(err);
-      }
+    socket.on("connect", () => {
+      console.log("✅ Connected to server:", socket.id);
+      resolve(socket.id);
     });
     
-    peer.on("disconnected", () => {
-      console.log("⚠️ Peer disconnected from signaling server");
-      // Try to reconnect
-      if (peer && !peer.destroyed) {
-        console.log("Attempting to reconnect...");
-        peer.reconnect();
-      }
+    socket.on("connect_error", (err) => {
+      console.error("❌ Connection error:", err.message);
+      reject(new Error("Server nicht erreichbar"));
     });
     
-    peer.on("connection", (conn) => {
-      console.log("📥 Incoming connection from:", conn.peer);
-      handleConnection(conn);
+    socket.on("disconnect", (reason) => {
+      console.log("⚠️ Disconnected:", reason);
+      handleDisconnect();
     });
-  });
-}
-
-function handleConnection(conn) {
-  console.log("handleConnection called, isHost:", netState.isHost);
-  peerConnection = conn;
-  
-  // For host receiving a connection, it opens automatically
-  if (netState.isHost) {
-    console.log("Host received connection from guest");
-    netState.connected = true;
-    netState.guestConnected = true;
-    lobbyGuest.textContent = "👤 Spieler verbunden!";
-    lobbyGuest.classList.remove("waiting");
-    lobbyGuest.classList.add("connected");
-    lobbyStartGame.disabled = false;
-    showConnectionStatus("🔗 Spieler verbunden!", "connected");
-  }
-  
-  conn.on("open", () => {
-    console.log("Connection opened event");
-    netState.connected = true;
     
-    if (netState.isHost && !netState.guestConnected) {
+    // Lobby events
+    socket.on("lobby_created", (data) => {
+      console.log("Lobby created:", data.code);
+      netState.lobbyCode = data.code;
+      lobbyCodeEl.textContent = data.code;
+    });
+    
+    socket.on("guest_joined", (data) => {
+      console.log("Guest joined:", data.guestId);
       netState.guestConnected = true;
+      netState.connected = true;
       lobbyGuest.textContent = "👤 Spieler verbunden!";
       lobbyGuest.classList.remove("waiting");
       lobbyGuest.classList.add("connected");
       lobbyStartGame.disabled = false;
       showConnectionStatus("🔗 Spieler verbunden!", "connected");
-    }
-  });
-  
-  conn.on("data", (data) => {
-    handleNetworkData(data);
-  });
-  
-  conn.on("close", () => {
-    console.log("Connection closed");
-    handleDisconnect();
-  });
-  
-  conn.on("error", (err) => {
-    console.error("Connection error:", err);
-    handleDisconnect();
-  });
-}
-
-function handleNetworkData(data) {
-  switch (data.type) {
-    case "player_update":
-      netState.remotePlayer.x = data.x;
-      netState.remotePlayer.y = data.y;
-      netState.remotePlayer.lives = data.lives;
-      break;
-      
-    case "bullet_fired":
-      // Add remote player's bullet
-      const bullet = {
-        x: data.x,
-        y: data.y,
-        w: 6,
-        h: 12,
-        speed: 520,
-        damage: 1,
-        color: netState.isHost ? "#ff6a6a" : "#00ff9a",
-        remote: true,
-      };
-      if (netState.isHost) {
-        p2Bullets.push(bullet);
-      } else {
-        bullets.push(bullet);
-      }
-      break;
-      
-    case "game_start":
+    });
+    
+    socket.on("joined_lobby", (data) => {
+      console.log("Joined lobby:", data.code);
+      netState.connected = true;
+      lobbyStatus.classList.add("hidden");
+      lobbyWaiting.classList.remove("hidden");
+      showConnectionStatus("🔗 Verbunden!", "connected");
+    });
+    
+    socket.on("join_error", (data) => {
+      console.error("Join error:", data.message);
+      showJoinError(data.message);
+    });
+    
+    socket.on("game_start", () => {
+      console.log("Game starting!");
       if (!netState.isHost) {
         lobbyPanel.classList.add("hidden");
         state.inMenu = false;
@@ -3118,32 +2998,65 @@ function handleNetworkData(data) {
         state.onlineMultiplayer = true;
         reset();
         initAudio();
+        showConnectionStatus("🔗 Online Spiel", "connected");
       }
-      break;
-      
-    case "game_state":
-      // Host sends full game state to guest
+    });
+    
+    socket.on("player_update", (data) => {
+      netState.remotePlayer.x = data.x;
+      netState.remotePlayer.y = data.y;
+      netState.remotePlayer.lives = data.lives;
+    });
+    
+    socket.on("bullet_fired", (data) => {
+      const bullet = {
+        x: data.x,
+        y: data.y,
+        w: 6,
+        h: 12,
+        speed: 520,
+        damage: 1,
+        color: data.isHost ? "#00ff9a" : "#ff6a6a",
+        remote: true,
+      };
+      if (netState.isHost) {
+        p2Bullets.push(bullet);
+      } else {
+        bullets.push(bullet);
+      }
+    });
+    
+    socket.on("game_state", (data) => {
       if (!netState.isHost) {
-        syncGameState(data.state);
+        syncGameState(data);
       }
-      break;
-      
-    case "enemy_killed":
-      // Sync kill from remote player
+    });
+    
+    socket.on("enemy_killed", (data) => {
       state.score = data.score;
       state.killsThisLevel = data.kills;
-      break;
-      
-    case "powerup_collected":
-      // Remove collected powerup
+    });
+    
+    socket.on("powerup_collected", (data) => {
       const idx = powerups.findIndex(p => p.id === data.id);
       if (idx >= 0) powerups.splice(idx, 1);
-      break;
-  }
+    });
+    
+    socket.on("player_disconnected", (data) => {
+      console.log("Player disconnected, was host:", data.isHost);
+      handleDisconnect();
+    });
+    
+    // Timeout
+    setTimeout(() => {
+      if (!socket.connected) {
+        reject(new Error("Verbindungs-Timeout"));
+      }
+    }, 10000);
+  });
 }
 
 function syncGameState(gameState) {
-  // Sync enemies, powerups, level, score from host
   if (gameState.enemies) {
     enemies.length = 0;
     gameState.enemies.forEach(e => enemies.push(e));
@@ -3157,9 +3070,9 @@ function syncGameState(gameState) {
   state.bossActive = gameState.bossActive || false;
 }
 
-function sendNetworkData(data) {
-  if (peerConnection && peerConnection.open) {
-    peerConnection.send(data);
+function sendNetworkData(type, data = {}) {
+  if (socket && socket.connected) {
+    socket.emit(type, data);
   }
 }
 
@@ -3169,8 +3082,7 @@ function sendPlayerUpdate() {
   netState.lastSync = now;
   
   const localPlayer = netState.isHost ? player : player2;
-  sendNetworkData({
-    type: "player_update",
+  sendNetworkData("player_update", {
     x: localPlayer.x,
     y: localPlayer.y,
     lives: netState.isHost ? state.lives : player2.lives,
@@ -3180,15 +3092,12 @@ function sendPlayerUpdate() {
 function sendGameState() {
   if (!netState.isHost) return;
   
-  sendNetworkData({
-    type: "game_state",
-    state: {
-      enemies: enemies.map(e => ({ ...e })),
-      powerups: powerups.map(p => ({ ...p })),
-      score: state.score,
-      level: state.level,
-      bossActive: state.bossActive,
-    }
+  sendNetworkData("game_state", {
+    enemies: enemies.map(e => ({ ...e })),
+    powerups: powerups.map(p => ({ ...p })),
+    score: state.score,
+    level: state.level,
+    bossActive: state.bossActive,
   });
 }
 
@@ -3197,8 +3106,7 @@ function handleDisconnect() {
   netState.guestConnected = false;
   
   if (state.onlineMultiplayer && !state.inMenu) {
-    // Show disconnect message during game
-    showConnectionStatus("❌ Disconnected", "disconnected");
+    showConnectionStatus("❌ Verbindung verloren", "disconnected");
     setTimeout(() => {
       openMenu();
       state.onlineMultiplayer = false;
@@ -3206,7 +3114,7 @@ function handleDisconnect() {
   }
   
   if (lobbyHost && !lobbyHost.classList.contains("hidden")) {
-    lobbyGuest.textContent = "⏳ Waiting for player...";
+    lobbyGuest.textContent = "⏳ Warte auf Spieler...";
     lobbyGuest.classList.add("waiting");
     lobbyGuest.classList.remove("connected");
     lobbyStartGame.disabled = true;
@@ -3226,26 +3134,25 @@ function hideConnectionStatus() {
 function openLobby() {
   menu.classList.add("hidden");
   lobbyPanel.classList.remove("hidden");
-  lobbyStatus.textContent = "Verbinde zum Netzwerk...";
+  lobbyStatus.textContent = "Verbinde zum Server...";
   lobbyMenu.classList.add("hidden");
   lobbyHost.classList.add("hidden");
   lobbyJoinForm.classList.add("hidden");
   lobbyWaiting.classList.add("hidden");
   
-  // Cleanup any existing peer
-  if (peer) {
-    peer.destroy();
-    peer = null;
+  // Cleanup existing socket
+  if (socket) {
+    socket.disconnect();
+    socket = null;
   }
   
-  // Initialize PeerJS
-  initPeer().then((peerId) => {
-    console.log("Guest peer ready:", peerId);
+  // Connect to server
+  connectToServer().then(() => {
     lobbyStatus.classList.add("hidden");
     lobbyMenu.classList.remove("hidden");
   }).catch(err => {
-    console.error("Failed to init peer:", err);
-    lobbyStatus.textContent = "❌ Verbindung fehlgeschlagen: " + err.message;
+    console.error("Failed to connect:", err);
+    lobbyStatus.textContent = "❌ " + err.message;
   });
 }
 
@@ -3253,14 +3160,10 @@ function closeLobby() {
   lobbyPanel.classList.add("hidden");
   menu.classList.remove("hidden");
   
-  // Cleanup peer
-  if (peerConnection) {
-    peerConnection.close();
-    peerConnection = null;
-  }
-  if (peer) {
-    peer.destroy();
-    peer = null;
+  if (socket) {
+    socket.emit("leave_lobby");
+    socket.disconnect();
+    socket = null;
   }
   
   netState.connected = false;
@@ -3271,7 +3174,6 @@ function closeLobby() {
 
 function createLobby() {
   netState.isHost = true;
-  netState.lobbyCode = generateLobbyCode();
   
   lobbyMenu.classList.add("hidden");
   lobbyHost.classList.remove("hidden");
@@ -3281,32 +3183,7 @@ function createLobby() {
   lobbyGuest.classList.remove("connected");
   lobbyStartGame.disabled = true;
   
-  // Reinitialize peer with lobby code as ID
-  if (peer) {
-    peer.destroy();
-    peer = null;
-  }
-  
-  const peerId = "M4TRIX_" + netState.lobbyCode;
-  console.log("Creating lobby with peer ID:", peerId);
-  
-  initPeer(peerId).then(() => {
-    console.log("Lobby created successfully:", netState.lobbyCode);
-    lobbyCodeEl.textContent = netState.lobbyCode;
-  }).catch(err => {
-    console.error("Failed to create lobby:", err);
-    // Try with a new code
-    netState.lobbyCode = generateLobbyCode();
-    const newPeerId = "M4TRIX_" + netState.lobbyCode;
-    console.log("Retrying with new code:", newPeerId);
-    
-    initPeer(newPeerId).then(() => {
-      lobbyCodeEl.textContent = netState.lobbyCode;
-    }).catch(err2 => {
-      lobbyCodeEl.textContent = "FEHLER";
-      console.error("Failed again:", err2);
-    });
-  });
+  socket.emit("create_lobby");
 }
 
 function showJoinForm() {
@@ -3328,98 +3205,11 @@ function joinLobby() {
   netState.isHost = false;
   netState.lobbyCode = code;
   
-  // Show connecting status
   lobbyJoinForm.classList.add("hidden");
   lobbyStatus.textContent = "🔗 Verbinde zu Lobby " + code + "...";
   lobbyStatus.classList.remove("hidden");
   
-  // Connect to host
-  const hostId = "M4TRIX_" + code;
-  console.log("Attempting to connect to:", hostId);
-  
-  // Check if peer is ready
-  if (!peer || peer.disconnected) {
-    console.log("Peer not ready, reinitializing...");
-    initPeer().then(() => {
-      attemptConnection(hostId);
-    }).catch(err => {
-      showJoinError("Netzwerk-Fehler: " + err.message);
-    });
-  } else {
-    attemptConnection(hostId);
-  }
-}
-
-function attemptConnection(hostId) {
-  // Wait for our peer to be fully ready
-  if (!peer || !peer.open) {
-    console.log("Waiting for peer to be ready...");
-    setTimeout(() => attemptConnection(hostId), 500);
-    return;
-  }
-  
-  try {
-    console.log("Connecting to peer:", hostId);
-    console.log("Our peer ID:", peer.id);
-    console.log("Our peer open:", peer.open);
-    
-    const conn = peer.connect(hostId, { 
-      reliable: true,
-      serialization: "json"
-    });
-    
-    if (!conn) {
-      showJoinError("Verbindung fehlgeschlagen!");
-      return;
-    }
-    
-    console.log("Connection object created, waiting for open...");
-    
-    // Debug: Log ICE connection state
-    if (conn.peerConnection) {
-      conn.peerConnection.oniceconnectionstatechange = () => {
-        console.log("ICE state:", conn.peerConnection.iceConnectionState);
-      };
-    }
-    
-    conn.on("open", () => {
-      console.log("✅ Connection opened to host!");
-      peerConnection = conn;
-      netState.connected = true;
-      
-      conn.on("data", (data) => {
-        handleNetworkData(data);
-      });
-      
-      conn.on("close", () => {
-        console.log("Connection closed");
-        handleDisconnect();
-      });
-      
-      lobbyStatus.classList.add("hidden");
-      lobbyWaiting.classList.remove("hidden");
-      showConnectionStatus("🔗 Verbunden!", "connected");
-    });
-    
-    conn.on("error", (err) => {
-      console.error("❌ Connection error:", err);
-      showJoinError("Verbindungsfehler: " + (err.type || err.message));
-    });
-    
-    // Timeout for connection
-    setTimeout(() => {
-      if (!netState.connected) {
-        console.log("Connection timeout - checking peer status");
-        console.log("Peer open:", peer?.open);
-        console.log("Peer disconnected:", peer?.disconnected);
-        showJoinError("Timeout! Host evtl. offline. Versuche es nochmal.");
-      }
-    }, 10000);
-    
-  } catch (err) {
-    console.error("Failed to connect:", err);
-    showJoinError("Fehler: " + err.message);
-  }
+  socket.emit("join_lobby", { code });
 }
 
 function showJoinError(message) {
@@ -3436,10 +3226,8 @@ function showJoinError(message) {
 function startOnlineGame() {
   if (!netState.isHost || !netState.guestConnected) return;
   
-  // Send start signal to guest
-  sendNetworkData({ type: "game_start" });
+  socket.emit("start_game");
   
-  // Start game locally
   lobbyPanel.classList.add("hidden");
   state.inMenu = false;
   state.multiplayer = true;
@@ -3447,40 +3235,23 @@ function startOnlineGame() {
   reset();
   initAudio();
   
-  showConnectionStatus("🔗 Playing Online", "connected");
+  showConnectionStatus("🔗 Online Spiel", "connected");
 }
 
 function leaveLobby() {
-  if (peerConnection) peerConnection.close();
   closeLobby();
 }
 
 function updateOnlineRemotePlayer(delta) {
-  // Update remote player position (smooth interpolation)
   if (netState.isHost) {
-    // Host controls player, guest is player2
     player2.x += (netState.remotePlayer.x - player2.x) * 0.3;
     player2.y += (netState.remotePlayer.y - player2.y) * 0.3;
     player2.lives = netState.remotePlayer.lives;
     player2.active = true;
   } else {
-    // Guest sees host as player
     player.x += (netState.remotePlayer.x - player.x) * 0.3;
     player.y += (netState.remotePlayer.y - player.y) * 0.3;
     state.lives = netState.remotePlayer.lives;
-  }
-}
-
-// Override shoot to send network data in online mode
-const originalShoot = typeof shoot === 'function' ? shoot : null;
-function shootWithNetwork() {
-  if (state.onlineMultiplayer && netState.connected) {
-    const localPlayer = netState.isHost ? player : player2;
-    sendNetworkData({
-      type: "bullet_fired",
-      x: localPlayer.x + localPlayer.w / 2 - 3,
-      y: localPlayer.y - 6,
-    });
   }
 }
 

@@ -71,9 +71,10 @@ Couch co-op mode for 2 players:
 Play with friends over the internet:
 - **Create Lobby**: Get a 6-character code to share
 - **Join Lobby**: Enter a friend's code to connect
-- Peer-to-peer connection via WebRTC
-- Real-time synchronized gameplay
-- No account or server required!
+- Real-time synchronized gameplay via Socket.io
+- Works across all networks!
+
+**Server Setup:** See `server/README.md` for deployment instructions.
 
 ### 🏪 Shop System
 Earn credits by defeating enemies and buy:
