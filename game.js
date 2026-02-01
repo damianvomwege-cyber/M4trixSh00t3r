@@ -107,7 +107,6 @@ const joystickBase = document.getElementById("joystick-base");
 const joystickStick = document.getElementById("joystick-stick");
 const touchFire = document.getElementById("touch-fire");
 const touchWeapon = document.getElementById("touch-weapon");
-const touchNuke = document.getElementById("touch-nuke");
 
 // Joystick state
 const joystick = {
@@ -277,9 +276,6 @@ const state = {
   p2RespawnTimer: 0,
   p1Dead: false,
   p1Invincible: 0, // Invincibility timer for P1
-  // Ultimate ability
-  nukeCooldown: 0, // Nuke ability cooldown (3 minutes)
-  nukeReady: true,
   // Admin panel state
   wasRunning: true,
   // Admin cheats
@@ -449,13 +445,6 @@ function updateHud() {
   if (state.shield > 0) active.push(`Shield (${Math.ceil(state.shield)}s)`);
   if (state.speed > 0) active.push(`Speed (${Math.ceil(state.speed)}s)`);
   if (state.spread > 0) active.push(`Spread (${Math.ceil(state.spread)}s)`);
-  
-  // Add nuke status
-  if (state.nukeReady) {
-    active.push("☢ NUKE [Q]");
-  } else if (state.nukeCooldown > 0) {
-    active.push(`☢ Nuke (${Math.ceil(state.nukeCooldown)}s)`);
-  }
   
   buffsEl.textContent = `Powerups: ${active.length ? active.join(" + ") : "-"}`;
   
@@ -1166,8 +1155,6 @@ function reset() {
   state.p2RespawnTimer = 0;
   state.p1Dead = false;
   state.p1Invincible = 0;
-  state.nukeCooldown = 0;
-  state.nukeReady = true;
   
   overlay.classList.add("hidden");
   if (resumeBtn) resumeBtn.classList.add("hidden");
@@ -1581,112 +1568,6 @@ function switchWeapon(delta = 1) {
   updateHud();
 }
 
-// ============================================================================
-// NUKE - Ultimate ability that kills all visible enemies
-// ============================================================================
-function activateNuke() {
-  if (state.nukeCooldown > 0 || !state.nukeReady) {
-    addDamageNumber(state.width / 2, state.height / 2, `NUKE: ${Math.ceil(state.nukeCooldown)}s`, true);
-    return;
-  }
-  
-  // Start cooldown (3 minutes)
-  state.nukeCooldown = 180;
-  state.nukeReady = false;
-  
-  // Epic screen flash
-  triggerFlash("#ff00ff", 0.5);
-  screenShake(1.0, 30);
-  triggerSlowMo(0.8, 0.2);
-  
-  // Play epic sound
-  if (audioCtx) {
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.type = "sawtooth";
-    osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(2000, audioCtx.currentTime + 0.3);
-    osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.8);
-    gain.gain.setValueAtTime(audioState.sfxVolume * 0.5, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1);
-    osc.start();
-    osc.stop(audioCtx.currentTime + 1);
-  }
-  
-  // Kill all visible enemies
-  let killCount = 0;
-  for (let i = enemies.length - 1; i >= 0; i--) {
-    const enemy = enemies[i];
-    
-    // Skip bosses - they take massive damage instead
-    if (enemy.type === "boss") {
-      const damage = enemy.maxHp * 0.25; // 25% of boss HP
-      enemy.hp -= damage;
-      addDamageNumber(enemy.x + enemy.w / 2, enemy.y, Math.floor(damage), true);
-      addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff", 30);
-      addLightning(state.width / 2, state.height, enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff");
-      continue;
-    }
-    
-    // Check if enemy is visible on screen
-    if (enemy.y > -enemy.h && enemy.y < state.height) {
-      killCount++;
-      
-      // Epic explosion for each enemy
-      addExplosion(enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff", 20);
-      addLightning(state.width / 2, state.height, enemy.x + enemy.w / 2, enemy.y + enemy.h / 2, "#ff00ff");
-      
-      // Score
-      const baseScore = 100;
-      const multiplier = getScoreMultiplier();
-      state.score += Math.floor(baseScore * multiplier);
-      state.killsThisLevel++;
-      
-      // Remove enemy
-      enemies.splice(i, 1);
-    }
-  }
-  
-  // Also clear enemy bullets
-  for (const b of enemyBullets) {
-    addExplosion(b.x, b.y, "#ff00ff", 5);
-  }
-  enemyBullets.length = 0;
-  
-  // Show kill count
-  addDamageNumber(state.width / 2, state.height / 2 - 50, `☢ NUKE ☢`, true);
-  addDamageNumber(state.width / 2, state.height / 2, `${killCount} KILLS!`, false);
-  
-  // Add combo for all kills
-  for (let i = 0; i < killCount; i++) {
-    addCombo();
-  }
-  
-  updateHud();
-}
-
-function updateNukeCooldown(delta) {
-  if (state.nukeCooldown > 0) {
-    state.nukeCooldown -= delta;
-    if (state.nukeCooldown <= 0) {
-      state.nukeCooldown = 0;
-      state.nukeReady = true;
-      addDamageNumber(state.width / 2, state.height - 80, "☢ NUKE READY!", false);
-    }
-    // Update mobile button
-    if (touchNuke) {
-      if (state.nukeReady) {
-        touchNuke.classList.remove("cooldown");
-        touchNuke.textContent = "☢";
-      } else {
-        touchNuke.classList.add("cooldown");
-        touchNuke.textContent = Math.ceil(state.nukeCooldown);
-      }
-    }
-  }
-}
 
 function allyShoot(allyUnit) {
   if (!allyUnit || !allyUnit.active || allyUnit.cooldown > 0) return;
@@ -3599,7 +3480,6 @@ function tick(timestamp) {
     updateSpawns(delta);
     updateEffects(slowMoActive ? delta / state.slowMoFactor : delta);
     updateRespawns(delta);
-    updateNukeCooldown(delta);
     checkCollisions();
     checkPowerupPickup();
     updateHud();
@@ -3724,11 +3604,6 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   
-  // Q = Nuke (Ultimate ability) - only trigger once, not on repeat
-  if (event.code === "KeyQ" && !event.repeat) {
-    activateNuke();
-    return;
-  }
   
   if (event.code === "KeyP" && !event.repeat) {
     togglePause();
@@ -3976,33 +3851,6 @@ if (touchWeapon) {
   }, { passive: false });
 }
 
-// Nuke button
-if (touchNuke) {
-  touchNuke.addEventListener("touchstart", (e) => {
-    e.preventDefault();
-    if (state.nukeReady) {
-      touchNuke.classList.add("active");
-      activateNuke();
-    }
-  }, { passive: false });
-
-  touchNuke.addEventListener("touchend", (e) => {
-    e.preventDefault();
-    touchNuke.classList.remove("active");
-  }, { passive: false });
-}
-
-// Update nuke button appearance based on cooldown
-function updateNukeButton() {
-  if (!touchNuke) return;
-  if (state.nukeReady) {
-    touchNuke.classList.remove("cooldown");
-    touchNuke.textContent = "☢";
-  } else {
-    touchNuke.classList.add("cooldown");
-    touchNuke.textContent = Math.ceil(state.nukeCooldown);
-  }
-}
 
 // ============================================================================
 // ADMIN PANEL
@@ -4051,7 +3899,6 @@ function populateAdmin() {
   setVal("admin-shieldtime", Math.ceil(state.shield));
   setVal("admin-speedtime", Math.ceil(state.speed));
   setVal("admin-spreadtime", Math.ceil(state.spread));
-  setVal("admin-nukecooldown", Math.ceil(state.nukeCooldown));
   setVal("admin-combo", state.combo);
   
   // Enemies
@@ -4099,8 +3946,6 @@ function applyAdminSettings() {
   state.shield = Math.max(0, toNum("admin-shieldtime", 0));
   state.speed = Math.max(0, toNum("admin-speedtime", 0));
   state.spread = Math.max(0, toNum("admin-spreadtime", 0));
-  state.nukeCooldown = Math.max(0, toNum("admin-nukecooldown", 0));
-  state.nukeReady = state.nukeCooldown <= 0;
   state.combo = Math.max(0, Math.floor(toNum("admin-combo", 0)));
   
   // Enemies
@@ -4169,11 +4014,6 @@ function adminGodMode() {
   updateHud();
 }
 
-function adminNukeNow() {
-  state.nukeCooldown = 0;
-  state.nukeReady = true;
-  activateNuke();
-}
 
 function adminSpawnBoss() {
   spawnBoss();
@@ -4198,8 +4038,6 @@ function adminMaxPowerups() {
   state.shield = 120;
   state.speed = 120;
   state.spread = 120;
-  state.nukeCooldown = 0;
-  state.nukeReady = true;
   addDamageNumber(state.width / 2, state.height / 2, "🌟 MAX POWERUPS!", false);
   updateHud();
 }
@@ -4626,7 +4464,7 @@ const matrixAI = {
     controls: {
       p1: "WASD zum Bewegen, Leertaste zum Schießen",
       p2: "Pfeiltasten zum Bewegen, Enter zum Schießen",
-      weapons: "1-4 für Waffenwechsel, Q für die Nuke",
+      weapons: "1-9 für Waffenwechsel",
       other: "P = Pause, B = Shop, I = AI Helper, M = Menü"
     },
     powerups: {
@@ -4642,8 +4480,7 @@ const matrixAI = {
       rocket: "Rakete - Langsam aber mächtig, mit Explosion",
       homing: "Homing Missile - Verfolgt automatisch Feinde"
     },
-    bosses: "Bosse erscheinen alle 5 Level. Sie haben mehrere Phasen und spezielle Angriffe. Tipp: Bewege dich viel und nutze die Nuke!",
-    nuke: "Die Nuke (Q-Taste) tötet alle sichtbaren Feinde sofort. Cooldown: 3 Minuten. Nutze sie weise!",
+    bosses: "Bosse erscheinen alle 5 Level. Sie haben mehrere Phasen und spezielle Angriffe. Tipp: Bewege dich viel!",
     ai: "Der AI Helper wird auf Level 2 freigeschaltet. Drücke I um ihn zu aktivieren. Er hilft dir beim Kämpfen!",
     shop: "Im Shop (B-Taste) kannst du permanente Upgrades kaufen. Credits bekommst du durch das Töten von Feinden.",
     multiplayer: "Local Multiplayer: 2 Spieler an einem Keyboard. Online: Erstelle eine Lobby und teile den Code!"
@@ -4680,7 +4517,6 @@ const matrixAI = {
     "Tipp: Sammle Rapid Fire Powerups - sie stacken und machen dich zur Schießmaschine!",
     "Tipp: Der Shield macht dich immun gegen ALLES. Nutze ihn für schwierige Bosse!",
     "Tipp: Bleib in Bewegung! Stillstand = Tod in der Matrix.",
-    "Tipp: Die Nuke ist dein Notfall-Button. Spar sie für Boss-Phasen auf!",
     "Tipp: Der AI Helper sammelt auch Powerups für dich. Teamwork!",
     "Tipp: Homing Missiles sind perfekt gegen schnelle Feinde.",
     "Tipp: Im Shop sind Damage Upgrades am Anfang am wichtigsten.",
@@ -4696,7 +4532,6 @@ const matrixAI = {
     { regex: /powerup|power-up|power up|boost|buffs/i, type: "powerups" },
     { regex: /waffe|weapon|schießen|gun|blaster|laser|rakete|rocket|homing/i, type: "weapons" },
     { regex: /boss|endgegner|schwer|stark/i, type: "boss" },
-    { regex: /nuke|bombe|explosion|ultimat/i, type: "nuke" },
     { regex: /ai|ki|helfer|helper|freund/i, type: "ai" },
     { regex: /shop|kaufen|upgrade|credits/i, type: "shop" },
     { regex: /multi|online|zusammen|freund|lobby/i, type: "multiplayer" },
@@ -5037,7 +4872,7 @@ const matrixAI = {
       ],
       controls: [
         `Die Steuerung ist einfach:\n• ${this.knowledge.controls.p1}\n• ${this.knowledge.controls.p2}\n• ${this.knowledge.controls.weapons}\n• ${this.knowledge.controls.other}\n\nÜbung macht den Meister!`,
-        `Hier die Basics:\n👤 P1: WASD + Space\n👥 P2: Pfeiltasten + Enter\n🔫 Waffen: 1-4\n☢️ Nuke: Q\n\nViel Spaß!`
+        `Hier die Basics:\n👤 P1: WASD + Space + Mausklick\n👥 P2: Pfeiltasten + Enter\n🔫 Waffen: 1-9\n\nViel Spaß!`
       ],
       powerups: () => {
         const pups = Object.entries(this.knowledge.powerups)
@@ -5053,13 +4888,8 @@ const matrixAI = {
       },
       boss: [
         this.knowledge.bosses,
-        "Bosse sind alle 5 Level. Mein Tipp: Sammle vorher Powerups und hab die Nuke bereit! 💪",
+        "Bosse sind alle 5 Level. Mein Tipp: Sammle vorher Powerups! 💪",
         "Der Boss hat mehrere Phasen. Je niedriger seine HP, desto aggressiver wird er. Bleib in Bewegung!"
-      ],
-      nuke: [
-        this.knowledge.nuke,
-        "Die Nuke ist dein Joker! Q drücken und BOOM - alle Feinde weg. Aber 3 Minuten Cooldown, also plan voraus!",
-        "☢️ NUKE = Panikknopf. Wenn's eng wird: Q drücken und durchatmen."
       ],
       ai: [
         this.knowledge.ai,
@@ -5455,14 +5285,14 @@ Deine Persönlichkeit:
 - Mystisch, weise, aber auch humorvoll und freundlich
 - Du verwendest manchmal Matrix-Referenzen und Zitate
 - Du kannst ALLES beantworten - Mathe, Wissenschaft, Geschichte, Allgemeinwissen, Coding, etc.
-- Du gibst auch Spieltipps wenn gefragt (WASD/Space für P1, Pfeiltasten/Enter für P2, Q für Nuke, etc.)
+- Du gibst auch Spieltipps wenn gefragt (WASD/Space/Mausklick für P1, Pfeiltasten/Enter für P2, etc.)
 - Du antwortest auf Deutsch, außer der User schreibt in einer anderen Sprache
 - Halte Antworten informativ aber nicht zu lang (max 200 Wörter)
 - Nutze gelegentlich passende Emojis
 
 Spielinfos falls gefragt:
 - Powerups: Rapid Fire, Shield, Speed, Spread Shot, Extra Life
-- Waffen: Blaster (1), Laser (2), Rakete (3), Homing Missile (4), Nuke (Q)
+- Waffen: Blaster (1), Laser (2), Rakete (3), Homing (4), Shotgun (5), Minigun (6), Plasma (7), Chain (8), Freeze (9)
 - Bosse erscheinen alle 5 Level
 - AI Helper ab Level 2 (Taste I)
 - Shop mit B öffnen`;
@@ -5664,7 +5494,6 @@ adminReset?.addEventListener("click", () => resetAllProgress());
 
 // Admin Quick Actions
 document.getElementById("admin-godmode")?.addEventListener("click", adminGodMode);
-document.getElementById("admin-nuke-now")?.addEventListener("click", adminNukeNow);
 document.getElementById("admin-spawn-boss")?.addEventListener("click", adminSpawnBoss);
 document.getElementById("admin-kill-all")?.addEventListener("click", adminKillAll);
 document.getElementById("admin-max-powerups")?.addEventListener("click", adminMaxPowerups);
@@ -5709,13 +5538,6 @@ document.getElementById("admin-give-life")?.addEventListener("click", () => {
   updateHud();
 });
 
-document.getElementById("admin-give-nuke")?.addEventListener("click", () => {
-  state.nukeCooldown = 0;
-  state.nukeReady = true;
-  addDamageNumber(player.x + player.w / 2, player.y, "☢️ NUKE READY!", false);
-  playPickup();
-  updateHud();
-});
 
 document.getElementById("admin-give-all")?.addEventListener("click", () => {
   state.rapid = 120;
@@ -5724,8 +5546,6 @@ document.getElementById("admin-give-all")?.addEventListener("click", () => {
   state.speed = 120;
   state.spread = 120;
   state.lives += 5;
-  state.nukeCooldown = 0;
-  state.nukeReady = true;
   addDamageNumber(player.x + player.w / 2, player.y, "🌟 ALL POWERUPS MAX!", false);
   addExplosion(player.x + player.w / 2, player.y + player.h / 2, "#ffffff", 30);
   playPickup();

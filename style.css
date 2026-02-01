@@ -257,27 +257,6 @@ canvas#game.playing {
   font-size: 24px;
 }
 
-.touch-nuke {
-  bottom: 180px;
-  right: 10px;
-  width: 60px;
-  height: 60px;
-  font-size: 28px;
-  background: rgba(255, 0, 255, 0.2);
-  border-color: rgba(255, 0, 255, 0.5);
-  color: #ff00ff;
-}
-
-.touch-nuke.active, .touch-nuke:active {
-  background: rgba(255, 0, 255, 0.6);
-  box-shadow: 0 0 30px rgba(255, 0, 255, 0.8);
-}
-
-.touch-nuke.cooldown {
-  opacity: 0.4;
-  background: rgba(100, 100, 100, 0.2);
-  border-color: rgba(100, 100, 100, 0.5);
-}
 
 /* Floating Admin Button */
 .admin-floating-btn {
@@ -834,16 +813,6 @@ canvas#game.playing {
   box-shadow: 0 0 15px #ff4488;
 }
 
-.btn-powerup.nuke {
-  background: rgba(255, 0, 255, 0.2);
-  border-color: #ff00ff;
-  color: #ff00ff;
-}
-
-.btn-powerup.nuke:hover {
-  background: rgba(255, 0, 255, 0.4);
-  box-shadow: 0 0 15px #ff00ff;
-}
 
 .btn-powerup.all {
   background: linear-gradient(135deg, rgba(0, 255, 154, 0.3), rgba(176, 0, 255, 0.3));
