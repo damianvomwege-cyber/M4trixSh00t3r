@@ -21,6 +21,7 @@ const overlaySubtitle = document.getElementById("overlay-subtitle");
 const overlayButtons = document.getElementById("overlay-buttons");
 const resumeBtn = document.getElementById("resume-btn");
 const restartBtn = document.getElementById("restart-btn");
+const shopOverlayBtn = document.getElementById("shop-overlay-btn");
 const adminOverlayBtn = document.getElementById("admin-overlay-btn");
 const menuBtn = document.getElementById("menu-btn");
 const menu = document.getElementById("menu");
@@ -3642,6 +3643,11 @@ restartBtn?.addEventListener("click", () => {
   if (resumeBtn) resumeBtn.classList.add("hidden");
   if (restartBtn) restartBtn.classList.add("hidden");
   reset();
+});
+
+shopOverlayBtn?.addEventListener("click", () => {
+  overlay.classList.add("hidden");
+  openShop();
 });
 
 adminOverlayBtn?.addEventListener("click", () => {
