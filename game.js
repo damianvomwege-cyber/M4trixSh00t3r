@@ -4731,10 +4731,21 @@ const chatAI = {
     this.updateStatus();
   },
   
-  async askGPT(message) {
+  lastRequestTime: 0,
+  minRequestInterval: 1000, // Minimum 1 second between requests
+  
+  async askGPT(message, retryCount = 0) {
     if (!this.isOnline()) {
       return null;
     }
+    
+    // Rate limiting - wait if too fast
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      await new Promise(resolve => setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest));
+    }
+    this.lastRequestTime = Date.now();
     
     // Add user message to history
     this.conversationHistory.push({ role: "user", content: message });
@@ -4787,9 +4798,18 @@ Spielinfos falls gefragt:
         if (response.status === 401) {
           return "❌ API Key ungültig! Bitte überprüfe deinen OpenAI API Key.";
         } else if (response.status === 429) {
-          return "⚠️ Rate Limit erreicht. Warte einen Moment und versuch es nochmal.";
-        } else if (response.status === 402) {
-          return "💳 OpenAI Guthaben aufgebraucht. Bitte lade dein Konto auf.";
+          // Rate limit - retry with exponential backoff
+          if (retryCount < 3) {
+            const waitTime = Math.pow(2, retryCount + 1) * 1000; // 2s, 4s, 8s
+            console.log(`Rate limit hit, retrying in ${waitTime}ms...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            // Remove the message we just added (will be re-added on retry)
+            this.conversationHistory.pop();
+            return this.askGPT(message, retryCount + 1);
+          }
+          return "⚠️ Rate Limit erreicht. Warte 30 Sekunden und versuch es nochmal.\n\n💡 Tipp: Lade Guthaben auf deinen OpenAI Account für höhere Limits!";
+        } else if (response.status === 402 || response.status === 400) {
+          return "💳 OpenAI Guthaben aufgebraucht oder Problem mit dem Account. Bitte check dein OpenAI Dashboard.";
         }
         
         return null; // Fallback to offline mode
