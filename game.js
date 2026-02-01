@@ -107,7 +107,7 @@ const audioState = {
 // ONLINE MULTIPLAYER (Socket.io)
 // ============================================================================
 // Server URL - Change this to your deployed server URL
-const SERVER_URL = "https://m4trix-server.onrender.com"; // Will be updated after deployment
+const SERVER_URL = "https://m4trixsh00t3r.onrender.com"; // Will be updated after deployment
 
 let socket = null;
 const netState = {
