@@ -149,9 +149,10 @@ const netState = {
   lobbyCode: null,
   guestConnected: false,
   lastSync: 0,
-  syncInterval: 50, // ms between syncs
-  remotePlayer: { x: 0, y: 0, lives: 3, shooting: false },
+  syncInterval: 30, // ms between syncs (faster = smoother)
+  remotePlayer: { x: 0, y: 0, targetX: 0, targetY: 0, lives: 3, shooting: false },
   remoteBullets: [],
+  interpolationFactor: 0.3, // Smoothing factor for remote player movement
 };
 
 // ============================================================================
@@ -384,6 +385,7 @@ const player2 = {
 
 const p2Bullets = [];
 const p2Keys = new Set();
+let p2CurrentWeapon = 1; // Player 2's current weapon
 
 let highscores = JSON.parse(localStorage.getItem("m4trix_highscores") || "[]");
 let unlockedAchievements = JSON.parse(localStorage.getItem("m4trix_achievements") || "[]");
@@ -471,7 +473,8 @@ function updateHud() {
   
   // Player 2 HUD
   if (state.multiplayer && p2LivesEl) {
-    p2LivesEl.textContent = `P2 Lives: ${player2.active ? player2.lives : "0"}`;
+    const p2Weapon = WEAPONS.find(w => w.id === p2CurrentWeapon) || WEAPONS[0];
+    p2LivesEl.textContent = `P2 Lives: ${player2.active ? player2.lives : "0"} | ${p2Weapon.name}`;
   }
 }
 
@@ -1950,25 +1953,101 @@ function player2Shoot() {
     sendNetworkData("bullet_fired", {
       x: player2.x + player2.w / 2 - 3,
       y: player2.y - 6,
+      weapon: p2CurrentWeapon,
     });
-    // Guest creates their own bullet locally too
   }
   
+  const weapon = WEAPONS.find(w => w.id === p2CurrentWeapon) || WEAPONS[0];
   const cx = player2.x + player2.w / 2;
   const cy = player2.y;
   
-  p2Bullets.push({
-    x: cx - 3,
-    y: cy - 6,
-    w: 6,
-    h: 12,
-    speed: 520,
-    damage: 1 * state.damageMultiplier,
-    color: "#ff6a6a",
-  });
+  // Different shooting based on weapon type
+  switch (weapon.id) {
+    case 1: // Blaster
+      p2Bullets.push({
+        x: cx - 3, y: cy - 6, w: 6, h: 12,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: "#ff6a6a",
+      });
+      playShoot();
+      break;
+    case 2: // Laser
+      lasers.push({
+        x: cx - 2, y: 0, w: 4, h: cy,
+        damage: weapon.damage * state.damageMultiplier,
+        color: "#ff6a6a", life: 0.1, pierce: true,
+      });
+      playLaser();
+      break;
+    case 3: // Rockets
+      rockets.push({
+        x: cx - 6, y: cy - 10, w: 12, h: 16,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: "#ff6a6a", explosionRadius: 60,
+      });
+      playRocket();
+      break;
+    case 4: // Homing
+      homingMissiles.push({
+        x: cx - 4, y: cy - 8, w: 8, h: 12,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: "#ff6a6a", target: null, angle: -Math.PI / 2,
+      });
+      playShoot();
+      break;
+    case 5: // Shotgun
+      for (let i = 0; i < 7; i++) {
+        const angle = -0.25 + (0.5 / 6) * i;
+        p2Bullets.push({
+          x: cx - 3, y: cy - 6, w: 5, h: 8,
+          speed: weapon.speed + (Math.random() - 0.5) * 100,
+          damage: weapon.damage * state.damageMultiplier,
+          color: "#ff6a6a", angle: angle,
+        });
+      }
+      playShotgun();
+      break;
+    case 6: // Minigun
+      p2Bullets.push({
+        x: cx - 2 + (Math.random() - 0.5) * 8, y: cy - 6, w: 4, h: 8,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: "#ff6a6a", angle: (Math.random() - 0.5) * 0.15,
+      });
+      playMinigun();
+      break;
+    case 7: // Plasma
+      p2Bullets.push({
+        x: cx - 8, y: cy - 10, w: 16, h: 16,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: "#ff6a6a", isPlasma: true, explosionRadius: 40,
+      });
+      playPlasma();
+      break;
+    case 8: // Chain
+      p2Bullets.push({
+        x: cx - 3, y: cy - 6, w: 6, h: 10,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: "#ff6a6a", isChain: true, chainCount: 3, hitEnemies: [],
+      });
+      playChain();
+      break;
+    case 9: // Freeze
+      p2Bullets.push({
+        x: cx - 4, y: cy - 8, w: 8, h: 12,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: "#ff8888", isFreeze: true, slowDuration: 3, slowAmount: 0.4,
+      });
+      playFreeze();
+      break;
+    default:
+      p2Bullets.push({
+        x: cx - 3, y: cy - 6, w: 6, h: 12,
+        speed: 520, damage: state.damageMultiplier, color: "#ff6a6a",
+      });
+      playShoot();
+  }
   
-  player2.cooldown = player2.baseCooldown;
-  playShoot();
+  player2.cooldown = weapon.cooldown || player2.baseCooldown;
 }
 
 function updateAlly(delta) {
@@ -3508,6 +3587,21 @@ window.addEventListener("keydown", (event) => {
   // In multiplayer mode, separate P1 and P2 keys
   if (state.multiplayer) {
     const p2KeySet = ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Numpad0"];
+    
+    // P2 weapon switching with Numpad 1-9
+    if (event.code.startsWith("Numpad") && event.code !== "Numpad0") {
+      const numKey = parseInt(event.code.replace("Numpad", ""));
+      if (numKey >= 1 && numKey <= 9) {
+        const weapon = WEAPONS.find(w => w.id === numKey);
+        if (weapon && weapon.unlocked) {
+          p2CurrentWeapon = numKey;
+          addDamageNumber(player2.x + player2.w / 2, player2.y - 20, `P2: ${weapon.name}`, false);
+          updateHud();
+        }
+      }
+      return;
+    }
+    
     if (p2KeySet.includes(event.code)) {
       p2Keys.add(event.code);
     } else {
@@ -3806,7 +3900,7 @@ function applyAdminSettings() {
   state.infiniteAmmo = toChk("admin-infiniteammo");
   
   // Weapons & Powerups
-  state.currentWeapon = Math.min(4, Math.max(1, Math.floor(toNum("admin-weapon", 1))));
+  state.currentWeapon = Math.min(9, Math.max(1, Math.floor(toNum("admin-weapon", 1))));
   state.rapidLevel = Math.max(0, Math.floor(toNum("admin-rapidlevel", 0)));
   state.rapid = Math.max(0, toNum("admin-rapidtime", 0));
   state.shield = Math.max(0, toNum("admin-shieldtime", 0));
@@ -4057,8 +4151,9 @@ function connectToServer() {
     });
     
     socket.on("player_update", (data) => {
-      netState.remotePlayer.x = data.x;
-      netState.remotePlayer.y = data.y;
+      // Store target position for interpolation
+      netState.remotePlayer.targetX = data.x;
+      netState.remotePlayer.targetY = data.y;
       netState.remotePlayer.lives = data.lives;
     });
     
@@ -4305,17 +4400,24 @@ function leaveLobby() {
 }
 
 function updateOnlineRemotePlayer(delta) {
+  // Interpolate remote player position smoothly
+  const interpFactor = Math.min(1, netState.interpolationFactor + delta * 5);
+  
+  // First, update internal remotePlayer position towards target
+  netState.remotePlayer.x += (netState.remotePlayer.targetX - netState.remotePlayer.x) * interpFactor;
+  netState.remotePlayer.y += (netState.remotePlayer.targetY - netState.remotePlayer.y) * interpFactor;
+  
   if (netState.isHost) {
     // Host receives guest position → update player2
-    player2.x += (netState.remotePlayer.x - player2.x) * 0.3;
-    player2.y += (netState.remotePlayer.y - player2.y) * 0.3;
+    player2.x = netState.remotePlayer.x;
+    player2.y = netState.remotePlayer.y;
     player2.lives = netState.remotePlayer.lives;
     player2.active = true;
   } else {
     // Guest receives host position → update player (the green ship they see)
-    player.x += (netState.remotePlayer.x - player.x) * 0.3;
-    player.y += (netState.remotePlayer.y - player.y) * 0.3;
-    // Note: Guest sees host as the "main" green player
+    // Guest controls player2 locally, sees host as player
+    player.x = netState.remotePlayer.x;
+    player.y = netState.remotePlayer.y;
   }
 }
 
