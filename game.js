@@ -2943,19 +2943,17 @@ function generateLobbyCode() {
 
 function initPeer(id = null) {
   return new Promise((resolve, reject) => {
-    // ICE servers for better NAT traversal
+    // ICE servers for better NAT traversal across different networks
     const options = { 
       debug: 1,
       config: {
         iceServers: [
+          // STUN servers
           { urls: "stun:stun.l.google.com:19302" },
           { urls: "stun:stun1.l.google.com:19302" },
-          { urls: "stun:stun2.l.google.com:19302" },
-          { urls: "stun:stun3.l.google.com:19302" },
-          { urls: "stun:stun4.l.google.com:19302" },
           { urls: "stun:global.stun.twilio.com:3478" },
-          { urls: "stun:stun.stunprotocol.org:3478" },
-          // Free TURN server (limited but helps)
+          
+          // Free TURN servers from Open Relay Project
           {
             urls: "turn:openrelay.metered.ca:80",
             username: "openrelayproject",
@@ -2965,8 +2963,33 @@ function initPeer(id = null) {
             urls: "turn:openrelay.metered.ca:443",
             username: "openrelayproject",
             credential: "openrelayproject"
+          },
+          {
+            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+            username: "openrelayproject",
+            credential: "openrelayproject"
+          },
+          
+          // Alternative free TURN servers
+          {
+            urls: "turn:relay.metered.ca:80",
+            username: "free",
+            credential: "free"
+          },
+          {
+            urls: "turn:relay.metered.ca:443",
+            username: "free", 
+            credential: "free"
+          },
+          
+          // Numb TURN server (free)
+          {
+            urls: "turn:numb.viagenie.ca",
+            username: "webrtc@live.com",
+            credential: "muazkh"
           }
-        ]
+        ],
+        iceCandidatePoolSize: 10
       }
     };
     
