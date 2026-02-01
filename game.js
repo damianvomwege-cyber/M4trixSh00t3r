@@ -1363,12 +1363,19 @@ function updateRain(delta) {
 }
 
 function updatePlayer(delta) {
+  // In online mode, guest doesn't control local player directly - it's synced from host
+  if (state.onlineMultiplayer && !netState.isHost) {
+    // Guest's "player" is controlled by network sync, not input
+    // Guest controls their own ship which appears as player2 on host
+    return;
+  }
+  
   let dx = 0;
   let dy = 0;
   const keys = new Set([...state.keys, ...state.touchKeys]);
   
-  // In multiplayer, P1 uses WASD only
-  if (state.multiplayer) {
+  // In local multiplayer, P1 uses WASD only
+  if (state.multiplayer && !state.onlineMultiplayer) {
     if (keys.has("KeyA")) dx -= 1;
     if (keys.has("KeyD")) dx += 1;
     if (keys.has("KeyW")) dy -= 1;
@@ -1403,10 +1410,34 @@ function updatePlayer(delta) {
 function updatePlayer2(delta) {
   if (!player2.active) return;
   
+  // In online mode as guest, player2 represents OUR ship (controlled by us)
+  if (state.onlineMultiplayer && !netState.isHost) {
+    let dx = 0;
+    let dy = 0;
+    const keys = new Set([...state.keys, ...state.touchKeys]);
+    
+    // Guest uses all movement keys
+    if (keys.has("ArrowLeft") || keys.has("KeyA") || keys.has("left")) dx -= 1;
+    if (keys.has("ArrowRight") || keys.has("KeyD") || keys.has("right")) dx += 1;
+    if (keys.has("ArrowUp") || keys.has("KeyW") || keys.has("up")) dy -= 1;
+    if (keys.has("ArrowDown") || keys.has("KeyS") || keys.has("down")) dy += 1;
+
+    const length = Math.hypot(dx, dy) || 1;
+    player2.x += (dx / length) * player2.speed * delta;
+    player2.y += (dy / length) * player2.speed * delta;
+    player2.x = Math.max(0, Math.min(state.width - player2.w, player2.x));
+    player2.y = Math.max(60, Math.min(state.height - player2.h - 20, player2.y));
+
+    // Guest shoots with Space
+    if (keys.has("Space") || keys.has("fire")) player2Shoot();
+    player2.cooldown = Math.max(0, player2.cooldown - delta);
+    return;
+  }
+  
+  // Local multiplayer: P2 uses Arrow Keys
   let dx = 0;
   let dy = 0;
   
-  // P2 uses Arrow Keys
   if (p2Keys.has("ArrowLeft")) dx -= 1;
   if (p2Keys.has("ArrowRight")) dx += 1;
   if (p2Keys.has("ArrowUp")) dy -= 1;
@@ -1432,6 +1463,7 @@ function player2Shoot() {
       x: player2.x + player2.w / 2 - 3,
       y: player2.y - 6,
     });
+    // Guest creates their own bullet locally too
   }
   
   const cx = player2.x + player2.w / 2;
@@ -3081,12 +3113,20 @@ function sendPlayerUpdate() {
   if (now - netState.lastSync < netState.syncInterval) return;
   netState.lastSync = now;
   
-  const localPlayer = netState.isHost ? player : player2;
-  sendNetworkData("player_update", {
-    x: localPlayer.x,
-    y: localPlayer.y,
-    lives: netState.isHost ? state.lives : player2.lives,
-  });
+  // Host sends player position, Guest sends player2 position
+  if (netState.isHost) {
+    sendNetworkData("player_update", {
+      x: player.x,
+      y: player.y,
+      lives: state.lives,
+    });
+  } else {
+    sendNetworkData("player_update", {
+      x: player2.x,
+      y: player2.y,
+      lives: player2.lives,
+    });
+  }
 }
 
 function sendGameState() {
@@ -3244,14 +3284,16 @@ function leaveLobby() {
 
 function updateOnlineRemotePlayer(delta) {
   if (netState.isHost) {
+    // Host receives guest position → update player2
     player2.x += (netState.remotePlayer.x - player2.x) * 0.3;
     player2.y += (netState.remotePlayer.y - player2.y) * 0.3;
     player2.lives = netState.remotePlayer.lives;
     player2.active = true;
   } else {
+    // Guest receives host position → update player (the green ship they see)
     player.x += (netState.remotePlayer.x - player.x) * 0.3;
     player.y += (netState.remotePlayer.y - player.y) * 0.3;
-    state.lives = netState.remotePlayer.lives;
+    // Note: Guest sees host as the "main" green player
   }
 }
 
