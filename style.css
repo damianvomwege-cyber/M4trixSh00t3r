@@ -88,6 +88,11 @@ canvas#game {
   width: 100vw;
   height: 100vh;
   background: transparent;
+  cursor: crosshair;
+}
+
+canvas#game.playing {
+  cursor: none;
 }
 
 /* Boss HP Bar */

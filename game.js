@@ -303,6 +303,13 @@ const player = {
   color: "#00ff9a",
 };
 
+// Mouse state for aiming
+const mouse = {
+  x: 0,
+  y: 0,
+  down: false,
+};
+
 const bullets = [];
 const allyBullets = [];
 const enemyBullets = [];
@@ -1100,6 +1107,7 @@ function openMenu() {
   menu.classList.remove("hidden");
   overlay.classList.add("hidden");
   if (adminFloatingBtn) adminFloatingBtn.classList.add("hidden");
+  canvas.classList.remove("playing"); // Restore normal cursor
 }
 
 function startGame() {
@@ -1108,6 +1116,7 @@ function startGame() {
   state.onlineMultiplayer = false;
   menu.classList.add("hidden");
   if (adminFloatingBtn) adminFloatingBtn.classList.remove("hidden");
+  canvas.classList.add("playing"); // Enable custom crosshair
   reset();
   initAudio();
   hideConnectionStatus();
@@ -1122,6 +1131,7 @@ function startMultiplayer() {
   state.multiplayer = true;
   menu.classList.add("hidden");
   if (adminFloatingBtn) adminFloatingBtn.classList.remove("hidden");
+  canvas.classList.add("playing"); // Enable custom crosshair
   reset();
   initAudio();
 }
@@ -1338,11 +1348,20 @@ function spawnPowerup(x, y) {
 function shoot() {
   if (player.cooldown > 0) return;
   
+  const cx = player.x + player.w / 2;
+  const cy = player.y;
+  
+  // Calculate angle towards mouse
+  const dx = mouse.x - cx;
+  const dy = mouse.y - cy;
+  const mouseAngle = Math.atan2(dy, dx);
+  
   // Send network bullet in online mode
   if (state.onlineMultiplayer && netState.connected) {
     sendNetworkData("bullet_fired", {
-      x: player.x + player.w / 2 - 3,
-      y: player.y - 6,
+      x: cx - 3,
+      y: cy - 6,
+      angle: mouseAngle,
     });
   }
   
@@ -1356,54 +1375,51 @@ function shoot() {
     player.cooldown = cooldown;
   }
   
-  const cx = player.x + player.w / 2;
-  const cy = player.y;
-  
   switch (weapon.id) {
     case 1: // Blaster
-      fireBullet(cx, cy, weapon);
+      fireBullet(cx, cy, weapon, mouseAngle);
       if (state.spread > 0) {
-        fireBullet(cx - 10, cy, weapon, -0.2);
-        fireBullet(cx + 10, cy, weapon, 0.2);
+        fireBullet(cx, cy, weapon, mouseAngle - 0.2);
+        fireBullet(cx, cy, weapon, mouseAngle + 0.2);
       }
       playShoot();
       break;
     case 2: // Laser
-      fireLaser(cx, cy, weapon);
+      fireLaser(cx, cy, weapon, mouseAngle);
       playLaser();
       break;
     case 3: // Rockets
-      fireRocket(cx, cy, weapon);
+      fireRocket(cx, cy, weapon, mouseAngle);
       playRocket();
       break;
     case 4: // Homing
-      fireHoming(cx, cy, weapon);
+      fireHoming(cx, cy, weapon, mouseAngle);
       playShoot();
       break;
     case 5: // Shotgun
-      fireShotgun(cx, cy, weapon);
+      fireShotgun(cx, cy, weapon, mouseAngle);
       playShotgun();
       break;
     case 6: // Minigun
-      fireMinigun(cx, cy, weapon);
+      fireMinigun(cx, cy, weapon, mouseAngle);
       playMinigun();
       break;
     case 7: // Plasma
-      firePlasma(cx, cy, weapon);
+      firePlasma(cx, cy, weapon, mouseAngle);
       playPlasma();
       break;
     case 8: // Chain Lightning
-      fireChain(cx, cy, weapon);
+      fireChain(cx, cy, weapon, mouseAngle);
       playChain();
       break;
     case 9: // Freeze
-      fireFreeze(cx, cy, weapon);
+      fireFreeze(cx, cy, weapon, mouseAngle);
       playFreeze();
       break;
   }
 }
 
-function fireBullet(x, y, weapon, angle = 0) {
+function fireBullet(x, y, weapon, angle = -Math.PI / 2) {
   bullets.push({
     x: x - 3,
     y: y - 6,
@@ -1412,24 +1428,33 @@ function fireBullet(x, y, weapon, angle = 0) {
     speed: weapon.speed,
     damage: weapon.damage * state.damageMultiplier,
     color: weapon.color,
-    angle,
+    angle, // Full directional angle (radians)
+    directional: true,
   });
 }
 
-function fireLaser(x, y, weapon) {
+function fireLaser(x, y, weapon, angle = -Math.PI / 2) {
+  // For laser, we draw a line from player towards mouse direction
+  const dist = 2000; // Long distance
+  const endX = x + Math.cos(angle) * dist;
+  const endY = y + Math.sin(angle) * dist;
+  
   lasers.push({
-    x: x - 2,
-    y: 0,
+    x1: x,
+    y1: y,
+    x2: endX,
+    y2: endY,
     w: 4,
-    h: y,
     damage: weapon.damage * state.damageMultiplier,
     color: weapon.color,
     life: 0.1,
     pierce: true,
+    angle,
+    directional: true,
   });
 }
 
-function fireRocket(x, y, weapon) {
+function fireRocket(x, y, weapon, angle = -Math.PI / 2) {
   rockets.push({
     x: x - 6,
     y: y - 10,
@@ -1439,10 +1464,12 @@ function fireRocket(x, y, weapon) {
     damage: weapon.damage * state.damageMultiplier,
     color: weapon.color,
     explosionRadius: 60,
+    angle,
+    directional: true,
   });
 }
 
-function fireHoming(x, y, weapon) {
+function fireHoming(x, y, weapon, angle = -Math.PI / 2) {
   homingMissiles.push({
     x: x - 4,
     y: y - 8,
@@ -1452,16 +1479,17 @@ function fireHoming(x, y, weapon) {
     damage: weapon.damage * state.damageMultiplier,
     color: weapon.color,
     target: null,
-    angle: -Math.PI / 2,
+    angle, // Initial direction
+    directional: true,
   });
 }
 
-function fireShotgun(x, y, weapon) {
-  // Fire 7 bullets in a spread pattern
+function fireShotgun(x, y, weapon, baseAngle = -Math.PI / 2) {
+  // Fire 7 bullets in a spread pattern around the base angle
   const numBullets = weapon.spread || 7;
   const spreadAngle = 0.5; // Total spread in radians
   for (let i = 0; i < numBullets; i++) {
-    const angle = -spreadAngle / 2 + (spreadAngle / (numBullets - 1)) * i;
+    const angleOffset = -spreadAngle / 2 + (spreadAngle / (numBullets - 1)) * i;
     bullets.push({
       x: x - 3,
       y: y - 6,
@@ -1470,12 +1498,13 @@ function fireShotgun(x, y, weapon) {
       speed: weapon.speed + (Math.random() - 0.5) * 100,
       damage: weapon.damage * state.damageMultiplier,
       color: weapon.color,
-      angle: angle,
+      angle: baseAngle + angleOffset,
+      directional: true,
     });
   }
 }
 
-function fireMinigun(x, y, weapon) {
+function fireMinigun(x, y, weapon, baseAngle = -Math.PI / 2) {
   // Slight random spread for minigun
   const spread = (Math.random() - 0.5) * 0.15;
   bullets.push({
@@ -1486,11 +1515,12 @@ function fireMinigun(x, y, weapon) {
     speed: weapon.speed,
     damage: weapon.damage * state.damageMultiplier,
     color: weapon.color,
-    angle: spread,
+    angle: baseAngle + spread,
+    directional: true,
   });
 }
 
-function firePlasma(x, y, weapon) {
+function firePlasma(x, y, weapon, angle = -Math.PI / 2) {
   // Large slow plasma ball
   bullets.push({
     x: x - 8,
@@ -1502,10 +1532,12 @@ function firePlasma(x, y, weapon) {
     color: weapon.color,
     isPlasma: true,
     explosionRadius: 40,
+    angle,
+    directional: true,
   });
 }
 
-function fireChain(x, y, weapon) {
+function fireChain(x, y, weapon, angle = -Math.PI / 2) {
   // Chain lightning bullet that jumps between enemies
   bullets.push({
     x: x - 3,
@@ -1518,10 +1550,12 @@ function fireChain(x, y, weapon) {
     isChain: true,
     chainCount: 3, // Can hit 3 additional enemies
     hitEnemies: [],
+    angle,
+    directional: true,
   });
 }
 
-function fireFreeze(x, y, weapon) {
+function fireFreeze(x, y, weapon, angle = -Math.PI / 2) {
   // Freeze bullet that slows enemies
   bullets.push({
     x: x - 4,
@@ -1534,6 +1568,8 @@ function fireFreeze(x, y, weapon) {
     isFreeze: true,
     slowDuration: 3, // Seconds to slow enemy
     slowAmount: 0.4, // Slow to 40% speed
+    angle,
+    directional: true,
   });
 }
 
@@ -1880,7 +1916,8 @@ function updatePlayer(delta) {
   player.x = Math.max(0, Math.min(state.width - player.w, player.x));
   player.y = Math.max(60, Math.min(state.height - player.h - 20, player.y));
 
-  if (keys.has("Space") || keys.has("fire")) shoot();
+  // Shoot with keyboard or mouse
+  if (keys.has("Space") || keys.has("fire") || mouse.down) shoot();
   player.cooldown = Math.max(0, player.cooldown - delta);
   
   // Update powerup timers
@@ -2118,9 +2155,21 @@ function updateBullets(delta) {
     const b = bullets[i];
     // Add trail
     if (Math.random() < 0.3) addTrail(b.x + b.w / 2, b.y + b.h, b.color || "#7fffe3");
-    b.y -= b.speed * delta;
-    if (b.angle) b.x += b.angle * b.speed * delta;
-    if (b.y + b.h < 0 || b.x < -50 || b.x > state.width + 50) bullets.splice(i, 1);
+    
+    if (b.directional && b.angle !== undefined) {
+      // Full directional movement (mouse aim)
+      b.x += Math.cos(b.angle) * b.speed * delta;
+      b.y += Math.sin(b.angle) * b.speed * delta;
+    } else {
+      // Legacy upward movement
+      b.y -= b.speed * delta;
+      if (b.angle) b.x += b.angle * b.speed * delta;
+    }
+    
+    // Remove if out of bounds
+    if (b.y + b.h < -50 || b.y > state.height + 50 || b.x < -50 || b.x > state.width + 50) {
+      bullets.splice(i, 1);
+    }
   }
 }
 
@@ -2138,8 +2187,17 @@ function updateLasers(delta) {
     const l = lasers[i];
     lasers[i].life -= delta;
     // Add lightning effect along laser
-    if (Math.random() < 0.5) {
-      addLightning(l.x, l.y, l.x + (Math.random() - 0.5) * 30, l.y + l.h * Math.random(), l.color);
+    if (l.directional && l.x1 !== undefined) {
+      // Directional laser - add effect along line
+      const midX = (l.x1 + l.x2) / 2;
+      const midY = (l.y1 + l.y2) / 2;
+      if (Math.random() < 0.5) {
+        addLightning(l.x1, l.y1, midX + (Math.random() - 0.5) * 30, midY, l.color);
+      }
+    } else {
+      if (Math.random() < 0.5) {
+        addLightning(l.x, l.y, l.x + (Math.random() - 0.5) * 30, l.y + l.h * Math.random(), l.color);
+      }
     }
     if (lasers[i].life <= 0) lasers.splice(i, 1);
   }
@@ -2160,8 +2218,17 @@ function updateRockets(delta) {
         color: ["#ff6a00", "#ff9900", "#ffcc00"][Math.floor(Math.random() * 3)],
       });
     }
-    r.y -= r.speed * delta;
-    if (r.y + r.h < 0) {
+    
+    // Directional movement
+    if (r.directional && r.angle !== undefined) {
+      r.x += Math.cos(r.angle) * r.speed * delta;
+      r.y += Math.sin(r.angle) * r.speed * delta;
+    } else {
+      r.y -= r.speed * delta;
+    }
+    
+    // Remove if out of bounds
+    if (r.y + r.h < -50 || r.y > state.height + 50 || r.x < -50 || r.x > state.width + 50) {
       rockets.splice(i, 1);
     }
   }
@@ -2915,7 +2982,34 @@ function checkPowerupPickup() {
 }
 
 function rectsOverlap(a, b) {
+  // Handle directional lasers with line collision
+  if (a.directional && a.x1 !== undefined) {
+    return lineRectsIntersect(a.x1, a.y1, a.x2, a.y2, b.x, b.y, b.w, b.h);
+  }
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+// Line-rectangle intersection test
+function lineRectsIntersect(x1, y1, x2, y2, rx, ry, rw, rh) {
+  // Check if either endpoint is inside the rect
+  if ((x1 >= rx && x1 <= rx + rw && y1 >= ry && y1 <= ry + rh) ||
+      (x2 >= rx && x2 <= rx + rw && y2 >= ry && y2 <= ry + rh)) {
+    return true;
+  }
+  
+  // Check line against each edge of the rectangle
+  return lineLineIntersect(x1, y1, x2, y2, rx, ry, rx + rw, ry) || // Top
+         lineLineIntersect(x1, y1, x2, y2, rx, ry + rh, rx + rw, ry + rh) || // Bottom
+         lineLineIntersect(x1, y1, x2, y2, rx, ry, rx, ry + rh) || // Left
+         lineLineIntersect(x1, y1, x2, y2, rx + rw, ry, rx + rw, ry + rh); // Right
+}
+
+function lineLineIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+  const denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+  if (denom === 0) return false;
+  const ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+  const ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+  return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
 }
 
 function findNearestEnemy() {
@@ -3050,6 +3144,53 @@ function drawAlly() {
   });
 }
 
+function drawCrosshair() {
+  // Don't draw crosshair if using mobile or in menu
+  if (!state.running || state.paused) return;
+  
+  const weapon = WEAPONS.find(w => w.id === state.currentWeapon) || WEAPONS[0];
+  const cx = mouse.x;
+  const cy = mouse.y;
+  const size = 12;
+  
+  ctx.save();
+  ctx.strokeStyle = weapon.color || "#00ff9a";
+  ctx.shadowColor = weapon.color || "#00ff9a";
+  ctx.shadowBlur = 10;
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = 0.8;
+  
+  // Crosshair lines
+  ctx.beginPath();
+  ctx.moveTo(cx - size, cy);
+  ctx.lineTo(cx - 4, cy);
+  ctx.moveTo(cx + 4, cy);
+  ctx.lineTo(cx + size, cy);
+  ctx.moveTo(cx, cy - size);
+  ctx.lineTo(cx, cy - 4);
+  ctx.moveTo(cx, cy + 4);
+  ctx.lineTo(cx, cy + size);
+  ctx.stroke();
+  
+  // Center dot
+  ctx.beginPath();
+  ctx.arc(cx, cy, 2, 0, Math.PI * 2);
+  ctx.fillStyle = weapon.color || "#00ff9a";
+  ctx.fill();
+  
+  // Aiming line from player to crosshair
+  ctx.globalAlpha = 0.2;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(player.x + player.w / 2, player.y);
+  ctx.lineTo(cx, cy);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  ctx.restore();
+}
+
 function drawPlayer2() {
   // Show respawn timer if P2 is dead
   if (!player2.active && state.multiplayer) {
@@ -3180,14 +3321,31 @@ function drawBullets() {
 
 function drawLasers() {
   for (const l of lasers) {
+    ctx.strokeStyle = l.color;
     ctx.fillStyle = l.color;
     ctx.shadowColor = l.color;
     ctx.shadowBlur = 20;
     ctx.globalAlpha = l.life * 10;
-    ctx.fillRect(l.x, l.y, l.w, l.h);
+    
+    if (l.directional && l.x1 !== undefined) {
+      // Draw line from x1,y1 to x2,y2
+      ctx.lineWidth = l.w || 4;
+      ctx.beginPath();
+      ctx.moveTo(l.x1, l.y1);
+      ctx.lineTo(l.x2, l.y2);
+      ctx.stroke();
+      
+      // Thicker glow line
+      ctx.globalAlpha = l.life * 5;
+      ctx.lineWidth = (l.w || 4) * 3;
+      ctx.stroke();
+    } else {
+      ctx.fillRect(l.x, l.y, l.w, l.h);
+    }
   }
   ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
+  ctx.lineWidth = 1;
 }
 
 function drawRockets() {
@@ -3469,6 +3627,7 @@ function tick(timestamp) {
   drawPlayer2();
   drawP2Bullets();
   drawPlayer();
+  drawCrosshair();
   drawLightnings();
   drawParticles();
   drawDamageNumbers();
@@ -3620,11 +3779,45 @@ window.addEventListener("keyup", (event) => {
 window.addEventListener("blur", () => {
   state.keys.clear();
   p2Keys.clear();
+  mouse.down = false;
 });
 
 window.addEventListener("resize", () => {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   resize();
+});
+
+// ============================================================================
+// MOUSE CONTROLS - Aim and shoot with mouse
+// ============================================================================
+canvas.addEventListener("mousemove", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  mouse.x = e.clientX - rect.left;
+  mouse.y = e.clientY - rect.top;
+});
+
+canvas.addEventListener("mousedown", (e) => {
+  if (e.button === 0) { // Left click
+    initAudio();
+    mouse.down = true;
+    mouse.x = e.clientX - canvas.getBoundingClientRect().left;
+    mouse.y = e.clientY - canvas.getBoundingClientRect().top;
+  }
+});
+
+canvas.addEventListener("mouseup", (e) => {
+  if (e.button === 0) {
+    mouse.down = false;
+  }
+});
+
+canvas.addEventListener("mouseleave", () => {
+  mouse.down = false;
+});
+
+// Prevent context menu on right click
+canvas.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
 });
 
 // ============================================================================
