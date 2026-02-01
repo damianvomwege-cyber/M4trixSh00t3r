@@ -96,6 +96,7 @@ const touchWeapon = document.getElementById("touch-weapon");
 // Joystick state
 const joystick = {
   active: false,
+  touchId: null, // Track the specific touch for multi-touch support
   startX: 0,
   startY: 0,
   currentX: 0,
@@ -2881,11 +2882,13 @@ window.addEventListener("resize", () => {
 // TOUCH CONTROLS - Virtual Joystick
 // ============================================================================
 
-// Joystick setup
+// Joystick setup - with multi-touch support
 if (joystickZone) {
   joystickZone.addEventListener("touchstart", (e) => {
     e.preventDefault();
-    const touch = e.touches[0];
+    // Use the first touch that started on this element
+    const touch = e.changedTouches[0];
+    joystick.touchId = touch.identifier;
     const rect = joystickBase.getBoundingClientRect();
     joystick.active = true;
     joystick.startX = rect.left + rect.width / 2;
@@ -2899,7 +2902,15 @@ if (joystickZone) {
   joystickZone.addEventListener("touchmove", (e) => {
     e.preventDefault();
     if (!joystick.active) return;
-    const touch = e.touches[0];
+    // Find the touch that matches our tracked ID
+    let touch = null;
+    for (let i = 0; i < e.touches.length; i++) {
+      if (e.touches[i].identifier === joystick.touchId) {
+        touch = e.touches[i];
+        break;
+      }
+    }
+    if (!touch) return;
     joystick.currentX = touch.clientX;
     joystick.currentY = touch.clientY;
     updateJoystick();
@@ -2907,7 +2918,18 @@ if (joystickZone) {
 
   const endJoystick = (e) => {
     e.preventDefault();
+    // Only end if it's our tracked touch
+    let isOurTouch = false;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === joystick.touchId) {
+        isOurTouch = true;
+        break;
+      }
+    }
+    if (!isOurTouch) return;
+    
     joystick.active = false;
+    joystick.touchId = null;
     joystick.dx = 0;
     joystick.dy = 0;
     joystickStick.style.transform = "translate(-50%, -50%)";
@@ -2954,22 +2976,38 @@ function updateJoystick() {
   if (joystick.dy > threshold) state.touchKeys.add("down");
 }
 
-// Fire button - continuous fire while held
+// Fire button - continuous fire while held (with multi-touch support)
 if (touchFire) {
   let fireInterval = null;
+  let fireTouchId = null;
   
   touchFire.addEventListener("touchstart", (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    fireTouchId = e.changedTouches[0].identifier;
     touchFire.classList.add("active");
     state.touchKeys.add("fire");
     // Continuous fire at a fixed rate
-    fireInterval = setInterval(() => {
-      state.touchKeys.add("fire");
-    }, 50);
+    if (!fireInterval) {
+      fireInterval = setInterval(() => {
+        state.touchKeys.add("fire");
+      }, 50);
+    }
   }, { passive: false });
 
   const endFire = (e) => {
     e.preventDefault();
+    // Only end if it's our tracked touch
+    let isOurTouch = false;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+      if (e.changedTouches[i].identifier === fireTouchId) {
+        isOurTouch = true;
+        break;
+      }
+    }
+    if (!isOurTouch) return;
+    
+    fireTouchId = null;
     touchFire.classList.remove("active");
     state.touchKeys.delete("fire");
     if (fireInterval) {
@@ -2980,7 +3018,6 @@ if (touchFire) {
 
   touchFire.addEventListener("touchend", endFire, { passive: false });
   touchFire.addEventListener("touchcancel", endFire, { passive: false });
-  touchFire.addEventListener("touchleave", endFire, { passive: false });
 }
 
 // Weapon switch button
