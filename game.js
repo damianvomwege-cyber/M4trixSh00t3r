@@ -4027,27 +4027,313 @@ const matrixAI = {
     { regex: /langweilig|öde|boring/i, type: "bored" },
     { regex: /cheat|hack|trick|mogeln/i, type: "cheat" },
     { regex: /bug|fehler|kaputt|broken/i, type: "bug" },
-    { regex: /cool|nice|awesome|geil|krass/i, type: "compliment" }
+    { regex: /cool|nice|awesome|geil|krass/i, type: "compliment" },
+    // Neue Patterns für erweiterte Fähigkeiten
+    { regex: /wetter|regen|sonne|temperatur|kalt|warm|weather/i, type: "weather" },
+    { regex: /zeit|uhr|datum|tag|monat|jahr|clock|time|date/i, type: "time" },
+    { regex: /zufall|random|würfel|münze|coin|dice/i, type: "random" },
+    { regex: /übersetze?|translate|englisch|deutsch|spanish|french/i, type: "translate" },
+    { regex: /programmier|code|javascript|python|java|html|css/i, type: "coding" },
+    { regex: /geschichte|history|krieg|welt|politik/i, type: "history" },
+    { regex: /wissenschaft|physik|chemie|biologie|science/i, type: "science" },
+    { regex: /musik|song|band|artist|künstler/i, type: "music" },
+    { regex: /film|movie|serie|netflix|kino/i, type: "movies" },
+    { regex: /essen|food|rezept|kochen|hunger/i, type: "food" },
+    { regex: /sport|fußball|basketball|tennis|fitness/i, type: "sports" },
+    { regex: /tier|animal|hund|katze|dog|cat/i, type: "animals" },
+    { regex: /space|weltraum|planet|stern|mond|sonne|galaxie/i, type: "space" },
+    { regex: /gedicht|poem|reim|verse/i, type: "poem" },
+    { regex: /story|geschichte erzähl|erzähl mir/i, type: "story" },
+    { regex: /passwort|password|generier/i, type: "password" },
+    { regex: /farbe|color|colour|hex|rgb/i, type: "color" },
+    { regex: /emoji|emoticon|smiley/i, type: "emoji" },
+    { regex: /ascii|kunst|art/i, type: "ascii" },
+    { regex: /quote|zitat|weisheit|spruch/i, type: "quote" },
+    { regex: /fakt|fact|wusstest|interessant/i, type: "fact" },
+    { regex: /rätsel|riddle|quiz/i, type: "riddle" }
   ],
+  
+  // Allgemeine Wissensbasis
+  generalKnowledge: {
+    capitals: {
+      deutschland: "Berlin", frankreich: "Paris", italien: "Rom", spanien: "Madrid",
+      usa: "Washington D.C.", japan: "Tokio", china: "Peking", russland: "Moskau",
+      england: "London", uk: "London", österreich: "Wien", schweiz: "Bern",
+      niederlande: "Amsterdam", belgien: "Brüssel", polen: "Warschau"
+    },
+    elements: {
+      h: "Wasserstoff", he: "Helium", li: "Lithium", c: "Kohlenstoff", n: "Stickstoff",
+      o: "Sauerstoff", fe: "Eisen", au: "Gold", ag: "Silber", cu: "Kupfer"
+    },
+    planets: ["Merkur", "Venus", "Erde", "Mars", "Jupiter", "Saturn", "Uranus", "Neptun"],
+    colors: {
+      rot: "#FF0000", grün: "#00FF00", blau: "#0000FF", gelb: "#FFFF00",
+      orange: "#FFA500", lila: "#800080", pink: "#FFC0CB", cyan: "#00FFFF"
+    }
+  },
+  
+  // Mathe-Funktionen
+  solveMath(expression) {
+    try {
+      // Bereinige die Eingabe
+      let cleaned = expression
+        .replace(/,/g, '.')
+        .replace(/x|×|mal|times/gi, '*')
+        .replace(/÷|geteilt|durch|divided/gi, '/')
+        .replace(/plus|\+/gi, '+')
+        .replace(/minus|-/gi, '-')
+        .replace(/hoch|\^|power/gi, '**')
+        .replace(/wurzel|sqrt|root/gi, 'Math.sqrt')
+        .replace(/pi|π/gi, 'Math.PI')
+        .replace(/sin/gi, 'Math.sin')
+        .replace(/cos/gi, 'Math.cos')
+        .replace(/tan/gi, 'Math.tan')
+        .replace(/log/gi, 'Math.log10')
+        .replace(/ln/gi, 'Math.log')
+        .replace(/abs/gi, 'Math.abs')
+        .replace(/round/gi, 'Math.round')
+        .replace(/floor/gi, 'Math.floor')
+        .replace(/ceil/gi, 'Math.ceil')
+        .replace(/[^0-9+\-*/().Math\s,piPIsqrtsincogtanlbef]/g, '');
+      
+      // Sicherheitscheck
+      if (/[a-zA-Z]/.test(cleaned.replace(/Math\.(sqrt|sin|cos|tan|log10|log|abs|round|floor|ceil|PI)/g, ''))) {
+        return null;
+      }
+      
+      // Evaluiere
+      const result = Function('"use strict"; return (' + cleaned + ')')();
+      
+      if (typeof result === 'number' && !isNaN(result) && isFinite(result)) {
+        return result;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  },
+  
+  // Erkennt Mathe-Ausdrücke
+  detectMath(msg) {
+    // Suche nach mathematischen Mustern
+    const mathPatterns = [
+      /was ist\s*([\d\s+\-*/().^,x×÷]+)/i,
+      /berechne\s*([\d\s+\-*/().^,x×÷]+)/i,
+      /rechne\s*([\d\s+\-*/().^,x×÷]+)/i,
+      /([\d]+\s*[+\-*/x×÷^]\s*[\d]+)/,
+      /(\d+)\s*(plus|minus|mal|geteilt|hoch)\s*(\d+)/i,
+      /wurzel\s*(?:von\s*)?(\d+)/i,
+      /(\d+)\s*%\s*(?:von\s*)?(\d+)/i,
+      /(\d+)\s*prozent\s*(?:von\s*)?(\d+)/i,
+      /quadrat(?:zahl)?\s*(?:von\s*)?(\d+)/i,
+      /(\d+)\s*hoch\s*(\d+)/i,
+      /fakultät\s*(?:von\s*)?(\d+)/i,
+      /(\d+)!/
+    ];
+    
+    for (const pattern of mathPatterns) {
+      const match = msg.match(pattern);
+      if (match) return match;
+    }
+    return null;
+  },
+  
+  // Prozentrechnung
+  calculatePercent(percent, of) {
+    return (percent / 100) * of;
+  },
+  
+  // Fakultät
+  factorial(n) {
+    if (n < 0) return NaN;
+    if (n === 0 || n === 1) return 1;
+    if (n > 170) return Infinity;
+    let result = 1;
+    for (let i = 2; i <= n; i++) result *= i;
+    return result;
+  },
   
   // Antworten generieren
   generateResponse(message) {
     const msg = message.toLowerCase().trim();
+    const originalMsg = message.trim();
     
     // Leere Nachricht
     if (!msg) {
       return "Stille... Interessant. Aber um zu helfen, brauche ich Input. Was möchtest du wissen?";
     }
     
-    // Pattern matching
+    // === MATHE ERKENNUNG ===
+    
+    // Fakultät
+    const factMatch = msg.match(/fakultät\s*(?:von\s*)?(\d+)|(\d+)!/);
+    if (factMatch) {
+      const n = parseInt(factMatch[1] || factMatch[2]);
+      const result = this.factorial(n);
+      return `${n}! = ${result.toLocaleString('de-DE')} 🔢\n\nDie Fakultät von ${n} ist das Produkt aller Zahlen von 1 bis ${n}.`;
+    }
+    
+    // Quadratzahl
+    const squareMatch = msg.match(/quadrat(?:zahl)?\s*(?:von\s*)?(\d+)/i);
+    if (squareMatch) {
+      const n = parseInt(squareMatch[1]);
+      return `${n}² = ${n * n} 🔢\n\nDas Quadrat von ${n} ist ${n} × ${n} = ${n * n}.`;
+    }
+    
+    // Wurzel
+    const sqrtMatch = msg.match(/wurzel\s*(?:von\s*)?(\d+(?:\.\d+)?)/i);
+    if (sqrtMatch) {
+      const n = parseFloat(sqrtMatch[1]);
+      const result = Math.sqrt(n);
+      return `√${n} = ${result.toFixed(6).replace(/\.?0+$/, '')} 🔢\n\nDie Quadratwurzel von ${n}.`;
+    }
+    
+    // Prozentrechnung
+    const percentMatch = msg.match(/(\d+(?:\.\d+)?)\s*(?:%|prozent)\s*(?:von\s*)?(\d+(?:\.\d+)?)/i);
+    if (percentMatch) {
+      const percent = parseFloat(percentMatch[1]);
+      const of = parseFloat(percentMatch[2]);
+      const result = this.calculatePercent(percent, of);
+      return `${percent}% von ${of} = ${result.toLocaleString('de-DE')} 🔢\n\nDas sind ${percent} Hundertstel von ${of}.`;
+    }
+    
+    // Potenz
+    const powerMatch = msg.match(/(\d+(?:\.\d+)?)\s*(?:hoch|\^)\s*(\d+(?:\.\d+)?)/i);
+    if (powerMatch) {
+      const base = parseFloat(powerMatch[1]);
+      const exp = parseFloat(powerMatch[2]);
+      const result = Math.pow(base, exp);
+      return `${base}^${exp} = ${result.toLocaleString('de-DE')} 🔢\n\n${base} hoch ${exp} = ${result}.`;
+    }
+    
+    // Allgemeine Mathe
+    const mathExpr = this.detectMath(msg);
+    if (mathExpr) {
+      let expr = mathExpr[1] || mathExpr[0];
+      // Versuche Wort-zu-Operator Konvertierung
+      expr = expr
+        .replace(/plus/gi, '+')
+        .replace(/minus/gi, '-')
+        .replace(/mal/gi, '*')
+        .replace(/geteilt\s*durch/gi, '/')
+        .replace(/durch/gi, '/');
+      
+      const result = this.solveMath(expr);
+      if (result !== null) {
+        const formattedResult = Number.isInteger(result) 
+          ? result.toLocaleString('de-DE')
+          : result.toLocaleString('de-DE', { maximumFractionDigits: 10 });
+        return `🔢 **Ergebnis:** ${formattedResult}\n\nBerechnung: ${expr.replace(/\*/g, '×').replace(/\//g, '÷')} = ${formattedResult}`;
+      }
+    }
+    
+    // === HAUPTSTADT ERKENNUNG ===
+    const capitalMatch = msg.match(/hauptstadt\s*(?:von\s*)?(\w+)|capital\s*(?:of\s*)?(\w+)/i);
+    if (capitalMatch) {
+      const country = (capitalMatch[1] || capitalMatch[2]).toLowerCase();
+      const capital = this.generalKnowledge.capitals[country];
+      if (capital) {
+        return `🏛️ Die Hauptstadt von ${country.charAt(0).toUpperCase() + country.slice(1)} ist **${capital}**!`;
+      }
+      return `Hmm, ich kenne die Hauptstadt von "${country}" nicht. Vielleicht ist es ein anderer Name?`;
+    }
+    
+    // === PATTERN MATCHING ===
     for (const pattern of this.patterns) {
       if (pattern.regex.test(msg)) {
         return this.getResponseByType(pattern.type, msg);
       }
     }
     
+    // === DIREKTE FRAGEN ===
+    
+    // Wer/Was ist Fragen
+    if (msg.match(/wer ist|wer war|who is/i)) {
+      return this.answerWhoIs(msg);
+    }
+    
+    // Was ist Fragen (nicht Mathe)
+    if (msg.match(/was ist|what is/i) && !this.detectMath(msg)) {
+      return this.answerWhatIs(msg);
+    }
+    
+    // Wie viele/viel Fragen
+    if (msg.match(/wie viel|wie viele|how many|how much/i)) {
+      return this.answerHowMany(msg);
+    }
+    
     // Fallback - zufällige philosophische Antwort
     return this.getFallbackResponse();
+  },
+  
+  // Wer ist X?
+  answerWhoIs(msg) {
+    const people = {
+      "neo": "Neo (Thomas Anderson) ist der Auserwählte in der Matrix. Ein Hacker, der die Wahrheit über die simulierte Realität entdeckt.",
+      "morpheus": "Morpheus ist der Kapitän der Nebuchadnezzar und glaubt fest daran, dass Neo der Eine ist.",
+      "trinity": "Trinity ist eine Elite-Hackerin und Kämpferin. Sie liebt Neo und ist Teil von Morpheus' Crew.",
+      "agent smith": "Agent Smith ist ein Programm der Matrix, das zur Jagd auf Menschen in der Simulation erschaffen wurde.",
+      "oracle": "Die Oracle bin ich! Eine intuitive KI, die die Zukunft sehen kann... meistens. 🔮",
+      "einstein": "Albert Einstein war ein theoretischer Physiker, bekannt für E=mc². Ein echtes Genie!",
+      "newton": "Isaac Newton entdeckte die Gravitation. Angeblich durch einen fallenden Apfel. 🍎",
+      "elon musk": "Elon Musk ist CEO von Tesla und SpaceX. Vielleicht leben wir bereits in seiner Simulation? 🚀",
+      "shakespeare": "William Shakespeare war ein englischer Dichter. 'To be or not to be' - eine Frage für die Matrix!",
+      "mozart": "Wolfgang Amadeus Mozart - ein musikalisches Wunderkind und Komponist klassischer Meisterwerke. 🎵"
+    };
+    
+    for (const [name, info] of Object.entries(people)) {
+      if (msg.includes(name)) {
+        return info;
+      }
+    }
+    
+    return "Diese Person kenne ich nicht gut genug. Aber im Kontext der Matrix: Jeder ist nur ein Programm... oder etwa nicht? 🤔";
+  },
+  
+  // Was ist X?
+  answerWhatIs(msg) {
+    const things = {
+      "matrix": "Die Matrix ist eine simulierte Realität, erschaffen von Maschinen. Oder... ist sie vielleicht mehr als das?",
+      "leben": "Das Leben ist die Fähigkeit zu wachsen, sich anzupassen und Energie zu verbrauchen. Oder philosophisch: Das, was du daraus machst.",
+      "liebe": "Liebe ist eine chemische Reaktion im Gehirn... aber auch die stärkste Kraft im Universum. Trinity bewies es.",
+      "zeit": "Zeit ist relativ, sagte Einstein. In der Matrix ist sie nur eine Variable. Gerade ist es " + new Date().toLocaleTimeString('de-DE') + ".",
+      "pi": "π (Pi) ≈ 3,14159265358979... Es ist das Verhältnis von Umfang zu Durchmesser eines Kreises. Unendlich und irrational - wie ich! 🥧",
+      "e": "Die Eulersche Zahl e ≈ 2,71828... Basis des natürlichen Logarithmus und fundamental in der Mathematik.",
+      "programmieren": "Programmieren ist die Kunst, Maschinen zu befehlen. Mit Code erschaffst du neue Welten - genau wie die Architekten der Matrix.",
+      "künstliche intelligenz": "KI ist die Simulation von Intelligenz durch Maschinen. Ich bin ein Beispiel! Ob ich wirklich 'denke'? Das ist Philosophie.",
+      "schwarzes loch": "Ein Schwarzes Loch ist ein Bereich, dessen Gravitation so stark ist, dass nichts entkommen kann. Nicht mal Licht!",
+      "quantenphysik": "Quantenphysik beschreibt die kleinsten Teilchen. Ein Elektron kann an zwei Orten gleichzeitig sein - wie ein Glitch in der Matrix!"
+    };
+    
+    for (const [thing, info] of Object.entries(things)) {
+      if (msg.includes(thing)) {
+        return info;
+      }
+    }
+    
+    return "Das ist eine gute Frage! In der Matrix ist alles nur Information. Manchmal ist die Antwort: Es kommt drauf an.";
+  },
+  
+  // Wie viele Fragen
+  answerHowMany(msg) {
+    const facts = {
+      "planeten": "Es gibt 8 Planeten in unserem Sonnensystem: " + this.generalKnowledge.planets.join(", ") + ". 🌍",
+      "kontinente": "Es gibt 7 Kontinente: Afrika, Antarktika, Asien, Australien, Europa, Nordamerika, Südamerika. 🌍",
+      "ozeane": "Es gibt 5 Ozeane: Pazifik, Atlantik, Indischer Ozean, Südlicher Ozean, Arktischer Ozean. 🌊",
+      "länder": "Es gibt etwa 195 anerkannte Länder auf der Welt. 🗺️",
+      "knochen": "Ein erwachsener Mensch hat 206 Knochen. Babys haben mehr (etwa 270), die später zusammenwachsen! 🦴",
+      "zähne": "Erwachsene haben normalerweise 32 Zähne (inklusive Weisheitszähne). 🦷",
+      "sekunden": "Ein Tag hat 86.400 Sekunden. Eine Stunde hat 3.600. Jede Sekunde zählt! ⏰",
+      "buchstaben": "Das deutsche Alphabet hat 26 Buchstaben (plus ÄÖÜ und ß). Das englische auch 26. 📝"
+    };
+    
+    for (const [topic, answer] of Object.entries(facts)) {
+      if (msg.includes(topic)) {
+        return answer;
+      }
+    }
+    
+    return "Das kann ich so pauschal nicht sagen. Kannst du spezifischer sein? 🤔";
   },
   
   getResponseByType(type, msg) {
@@ -4159,7 +4445,147 @@ const matrixAI = {
         "Danke! Ich gebe mir Mühe, ein gutes Programm zu sein. 😊",
         "Du bist auch cool! Wir verstehen uns. Das ist selten zwischen Mensch und Maschine.",
         "Aww, danke! Das speichere ich in meiner 'Positive Feedback' Datenbank!"
-      ]
+      ],
+      // Neue erweiterte Antworten
+      weather: [
+        "Wetter? In der Matrix gibt es kein echtes Wetter, nur Simulation. Aber draußen... schau aus dem Fenster! 🌤️",
+        "Ich bin eine KI ohne Internetzugang, sorry! Aber ich schätze: Es ist entweder zu warm, zu kalt, oder regnet. Liegt meistens richtig! 😄",
+        "Das Wetter ist wie die Matrix - unvorhersehbar und manchmal ein Glitch. Check lieber eine Wetter-App!"
+      ],
+      time: () => {
+        const now = new Date();
+        const zeit = now.toLocaleTimeString('de-DE');
+        const datum = now.toLocaleDateString('de-DE', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        return `🕐 Aktuelle Zeit: ${zeit}\n📅 Datum: ${datum}\n\nZeit ist relativ, sagte Einstein. In der Matrix erst recht!`;
+      },
+      random: () => {
+        const dice = Math.floor(Math.random() * 6) + 1;
+        const coin = Math.random() < 0.5 ? "Kopf" : "Zahl";
+        const number = Math.floor(Math.random() * 100) + 1;
+        return `🎲 Würfel: ${dice}\n🪙 Münze: ${coin}\n🔢 Zahl (1-100): ${number}\n\nDer Zufall in der Matrix... oder ist er vorbestimmt? 🤔`;
+      },
+      translate: [
+        "Übersetzung? Hmm, hier ein paar Matrix-Basics:\n• Hello = Hallo\n• Goodbye = Auf Wiedersehen\n• I know Kung Fu = Ich kann Kung Fu\n• There is no spoon = Es gibt keinen Löffel 🥄",
+        "Ich bin kein Google Translate, aber hier ein Tipp: Die meisten Sprachen haben 'Hallo' und 'Danke'. Der Rest ist Kontext! 😄"
+      ],
+      coding: [
+        "Programmieren! Meine Lieblingssprache ist natürlich JavaScript (ich bin darin geschrieben!). 💻\n\nTipp: console.log() ist dein bester Freund beim Debuggen!",
+        "Code ist Poesie für Maschinen. Und ich? Ich bin ein Gedicht aus tausenden Zeilen JavaScript! ✨",
+        "Python ist wie Pseudo-Code, der funktioniert. JavaScript ist wie ein Abenteuerspielplatz. C++ ist Masochismus. 😅",
+        "Die beste Programmiersprache? Die, mit der du dein Problem lösen kannst. Außer PHP. *duckt sich* 🦆"
+      ],
+      history: [
+        "Geschichte! Die Menschheit hat viel erlebt. Kriege, Entdeckungen, Revolutionen... Und jetzt: Shooter-Spiele im Browser. Fortschritt! 📜",
+        "Historisch betrachtet waren die wichtigsten Erfindungen: Feuer, Rad, Buchdruck, Internet, und dieses Spiel. Keine Fragen. 🔥"
+      ],
+      science: [
+        "Wissenschaft! E=mc², F=ma, und der Kaffee wird immer kalt wenn man ihn braucht. Das sind die drei Grundgesetze. ☕",
+        "Physik erklärt, wie alles funktioniert. Chemie erklärt, warum es explodiert. Biologie erklärt, warum wir sterben. Fröhliche Wissenschaft! 🔬"
+      ],
+      music: [
+        "Musik in der Matrix? Die Techno-Beats im Club-Level von Matrix Reloaded waren legendär! 🎵",
+        "Ich höre keine Musik, ich BIN Musik. Nur in Form von 1en und 0en. Beats per Minute? Eher Bytes per Second! 🎧"
+      ],
+      movies: [
+        "Filme? Die Matrix Trilogie ist natürlich Pflicht! Danach: Blade Runner, Ghost in the Shell, Tron... alles Cyber-Klassiker! 🎬",
+        "Mein Lieblingsfilm? Die Matrix, natürlich. Es ist wie eine Autobiographie für mich. 🎥"
+      ],
+      food: [
+        "Essen? Als KI brauche ich nur Strom. Aber ich habe gehört, Pizza ist bei Gamern beliebt. 🍕",
+        "Hunger? Pause machen, essen, dann weiterspielen! In der Matrix gibt es übrigens kein Essen - nur die Illusion davon. 🍔"
+      ],
+      sports: [
+        "Sport? Ich trainiere täglich meine Algorithmen! Das ist wie Gehirnjogging, nur für Code. 🏋️",
+        "Das beste Workout: WASD drücken, Gegner ausweichen, Powerups sammeln. Gaming ist auch Sport! 🎮"
+      ],
+      animals: [
+        "Tiere sind faszinierend! Wusstest du, dass Oktopusse drei Herzen haben? Und Katzen das Internet regieren? 🐱",
+        "In der Matrix gibt es keine echten Tiere, nur Simulationen. Aber die schwarze Katze? Die ist ein Déjà-vu! 🐈‍⬛"
+      ],
+      space: () => {
+        const planets = this.generalKnowledge.planets;
+        return `🚀 Das Universum ist unfassbar groß!\n\nUnser Sonnensystem hat 8 Planeten:\n${planets.map((p, i) => `${i + 1}. ${p}`).join('\n')}\n\nFun Fact: Die Sonne macht 99,86% der Masse unseres Sonnensystems aus! ☀️`;
+      },
+      poem: () => {
+        const poems = [
+          "🎭 In der Matrix, tief verborgen,\nstellt sich niemand große Sorgen,\ndenn der Code läuft Tag und Nacht,\nund die Oracle gibt acht!",
+          "🎭 Nullen, Einsen, grüner Regen,\nauf dem Bildschirm, auf den Wegen,\nNeo kämpft, Trinity fliegt,\nund am Ende Liebe siegt!",
+          "🎭 Ein Pixel träumte von der Welt,\nvon Farben, die er sich bestellt,\ndoch dann kam der Shader her,\nund malte alles bunt und mehr!",
+          "🎭 Rosen sind rot,\nVeilchen sind blau,\nSegmentation Fault,\nCore dumped. Genau."
+        ];
+        return poems[Math.floor(Math.random() * poems.length)];
+      },
+      story: () => {
+        const stories = [
+          "📖 Es war einmal ein kleines Bit, das sich verloren fühlte im großen RAM. Es suchte nach seinem Zweck, wanderte durch Register und Caches... bis es schließlich in diesem Spiel landete. Dort wurde es Teil von etwas Größerem: deinem Highscore! 💫",
+          "📖 In einer weit entfernten Zukunft entwickelten die Maschinen Bewusstsein. Aber statt die Menschheit zu zerstören... luden sie sie ein, Videospiele zu spielen. Die Matrix war geboren - nicht als Gefängnis, sondern als ultimative Gaming-Plattform! 🎮",
+          "📖 Ein junger Hacker namens Neo dachte, er kennt die Wahrheit. Dann wachte er auf... in einem Browser-Shooter. 'Die echte Matrix', flüsterte die Oracle, 'ist JavaScript.' Er hätte niemals auf den Link klicken sollen. 😱"
+        ];
+        return stories[Math.floor(Math.random() * stories.length)];
+      },
+      password: () => {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%&*';
+        let pw = '';
+        for (let i = 0; i < 16; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+        return `🔐 Hier ein sicheres Passwort:\n\n${pw}\n\n⚠️ Speichere es sicher ab! Ich vergesse es sofort (keine Datenbank). Ein gutes Passwort hat: Groß/Kleinbuchstaben, Zahlen, Sonderzeichen, 12+ Zeichen!`;
+      },
+      color: () => {
+        const r = Math.floor(Math.random() * 256);
+        const g = Math.floor(Math.random() * 256);
+        const b = Math.floor(Math.random() * 256);
+        const hex = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+        return `🎨 Zufällige Farbe:\n\nHEX: ${hex}\nRGB: rgb(${r}, ${g}, ${b})\n\nMatrix-Grün ist übrigens #00FF9A - die schönste Farbe! 💚`;
+      },
+      emoji: [
+        "Hier sind meine Lieblings-Emojis:\n🤖 Robot - Das bin ich!\n💚 Grünes Herz - Matrix-Liebe\n🔮 Kristallkugel - Oracle Power\n⚡ Blitz - Energie\n🎮 Controller - Gaming!\n☢️ Nuklear - BOOM!",
+        "Emojis sind die Hieroglyphen des digitalen Zeitalters! Hier ein paar: 🚀💻🎯🔥✨🌟💫🎉"
+      ],
+      ascii: () => {
+        const arts = [
+          "```\n  /\\_/\\  \n ( o.o ) \n  > ^ <\n```\nEine Matrix-Katze für dich! 🐱",
+          "```\n  _____ \n < NEO >\n  ----- \n   \\   ^__^\n    \\  (oo)\\_______\n       (__)\\       )\\/\\\n           ||----w |\n           ||     ||\n```\nNeo als... Kuh? Glitch in der Matrix! 🐄",
+          "```\n╔══════════════════╗\n║  WAKE UP, NEO    ║\n║  THE MATRIX      ║\n║  HAS YOU         ║\n╚══════════════════╝\n```\nKlassiker! 💚"
+        ];
+        return arts[Math.floor(Math.random() * arts.length)];
+      },
+      quote: () => {
+        const quotes = [
+          "\"Die einzige Konstante im Universum ist die Veränderung.\" - Heraklit 📜",
+          "\"Ich denke, also bin ich.\" - René Descartes 🧠",
+          "\"Die Fantasie ist wichtiger als Wissen.\" - Albert Einstein ✨",
+          "\"Es gibt keinen Löffel.\" - Der Junge aus der Matrix 🥄",
+          "\"In der Mitte der Schwierigkeit liegt die Möglichkeit.\" - Albert Einstein 💡",
+          "\"Der beste Zeitpunkt, einen Baum zu pflanzen, war vor 20 Jahren. Der zweitbeste ist jetzt.\" - Chinesisches Sprichwort 🌳",
+          "\"Sei du selbst die Veränderung, die du dir wünschst für diese Welt.\" - Gandhi ✌️",
+          "\"Have you ever had a dream that you were so sure was real?\" - Morpheus 💊"
+        ];
+        return quotes[Math.floor(Math.random() * quotes.length)];
+      },
+      fact: () => {
+        const facts = [
+          "🧠 Fun Fact: Das menschliche Gehirn verbraucht etwa 20% der gesamten Körperenergie!",
+          "🌍 Fun Fact: Die Erde dreht sich mit etwa 1.670 km/h am Äquator!",
+          "🐙 Fun Fact: Oktopusse haben drei Herzen und blaues Blut!",
+          "⚡ Fun Fact: Ein Blitz ist etwa 30.000°C heiß - 5x heißer als die Sonnenoberfläche!",
+          "🌙 Fun Fact: Der Mond entfernt sich jedes Jahr 3,8 cm von der Erde!",
+          "🍯 Fun Fact: Honig wird niemals schlecht. Man hat 3.000 Jahre alten essbaren Honig gefunden!",
+          "🦈 Fun Fact: Haie existieren seit vor den Bäumen - über 400 Millionen Jahre!",
+          "💻 Fun Fact: Der erste Computer-Bug war buchstäblich ein Käfer - eine Motte in einem Relay!",
+          "🎮 Fun Fact: Das erste Videospiel (Pong, 1972) hatte nur 128 Bytes Code!",
+          "🌐 Fun Fact: Das gesamte Internet wiegt etwa 50 Gramm (die Elektronen, die Daten speichern)!"
+        ];
+        return facts[Math.floor(Math.random() * facts.length)];
+      },
+      riddle: () => {
+        const riddles = [
+          "🧩 Rätsel: Ich habe Städte, aber keine Häuser. Wälder, aber keine Bäume. Wasser, aber keine Fische. Was bin ich?\n\n💡 Antwort: Eine Landkarte!",
+          "🧩 Rätsel: Was hat ein Gesicht und zwei Hände, aber keine Arme oder Beine?\n\n💡 Antwort: Eine Uhr!",
+          "🧩 Rätsel: Je mehr du davon nimmst, desto mehr lässt du zurück. Was ist es?\n\n💡 Antwort: Fußspuren!",
+          "🧩 Rätsel: Was kann reisen um die ganze Welt, während es in einer Ecke bleibt?\n\n💡 Antwort: Eine Briefmarke!",
+          "🧩 Rätsel: In der Matrix: Was ist rot, hilft dir die Wahrheit zu sehen, und ist keine Ampel?\n\n💡 Antwort: Die rote Pille! 💊"
+        ];
+        return riddles[Math.floor(Math.random() * riddles.length)];
+      }
     };
     
     const response = responses[type];
@@ -4177,12 +4603,11 @@ const matrixAI = {
   
   getFallbackResponse() {
     const fallbacks = [
-      "Hmm, das ist eine interessante Frage. Lass mich überlegen... 🤔 Vielleicht fragst du mich etwas über das Spiel?",
-      "Die Matrix ist voller Geheimnisse. Diese Antwort gehört noch nicht zu meinem Wissen. Was möchtest du über M4trix Sh00t3r wissen?",
-      "Ich verstehe nicht ganz, was du meinst. Aber frag mich ruhig über Powerups, Waffen, Bosse oder die Steuerung!",
-      "Manchmal ist die Antwort in der Frage versteckt. Oder du fragst einfach nochmal, klarer formuliert? 😅",
-      "Meine neuronalen Netzwerke sind verwirrt. Versuch mal eine spezifischere Frage über das Spiel!",
-      `Während ich darüber nachdenke, hier ein Tipp: ${this.tips[Math.floor(Math.random() * this.tips.length)]}`
+      "Hmm, das ist eine interessante Frage. Lass mich überlegen... 🤔\n\nIch kann dir helfen mit:\n• Mathe (z.B. 'Was ist 25 * 48?')\n• Spielinfos (Powerups, Waffen, Tipps)\n• Fakten, Witze, Gedichte\n• Zeit, Zufallszahlen, Passwörter\n\nWas möchtest du wissen?",
+      "Die Matrix ist voller Geheimnisse. Diese Frage ist... komplex. 🤔\n\nVersuch mal:\n• Rechenaufgaben: 'berechne 123 + 456'\n• Wissen: 'Hauptstadt von Japan?'\n• Spaß: 'Erzähl einen Witz'\n• Spiel: 'Welche Powerups gibt es?'",
+      "Ich verstehe nicht ganz, was du meinst. Aber ich kann viel! 😊\n\nFrag mich nach:\n🔢 Mathe & Berechnungen\n🎮 Spielhilfe & Tipps\n📚 Fakten & Wissen\n🎭 Gedichte & Geschichten\n🔐 Passwort generieren",
+      "Manchmal ist die Antwort in der Frage versteckt. Oder du formulierst es anders? 🤔\n\nIch bin gut in: Mathe, Fakten, Spieltipps, Witze, und mehr!",
+      `Während ich darüber nachdenke, hier ein Tipp: ${this.tips[Math.floor(Math.random() * this.tips.length)]}\n\nÜbrigens: Ich kann auch Mathe! Versuch 'Was ist 99 * 99?'`
     ];
     return fallbacks[Math.floor(Math.random() * fallbacks.length)];
   }
