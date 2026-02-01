@@ -28,6 +28,7 @@ const adOverlay = document.getElementById("ad-overlay");
 const adTimer = document.getElementById("ad-timer");
 const adSkip = document.getElementById("ad-skip");
 const freePowerupBtn = document.getElementById("free-powerup-btn");
+const adminFloatingBtn = document.getElementById("admin-floating-btn");
 const menu = document.getElementById("menu");
 const startBtn = document.getElementById("start-btn");
 const multiplayerBtn = document.getElementById("multiplayer-btn");
@@ -943,8 +944,15 @@ function gameOver() {
   overlayTitle.textContent = "Game Over";
   overlaySubtitle.textContent = `Score: ${state.score}`;
   // Show game over buttons (restart visible, resume hidden)
+  // In multiplayer, hide restart button - players should return to menu
   if (resumeBtn) resumeBtn.classList.add("hidden");
-  if (restartBtn) restartBtn.classList.remove("hidden");
+  if (restartBtn) {
+    if (state.multiplayer) {
+      restartBtn.classList.add("hidden");
+    } else {
+      restartBtn.classList.remove("hidden");
+    }
+  }
   playGameOver();
   stopBgm();
   saveHighscore();
@@ -1083,6 +1091,8 @@ function openMenu() {
   state.paused = false;
   menu.classList.remove("hidden");
   overlay.classList.add("hidden");
+  if (adminFloatingBtn) adminFloatingBtn.classList.add("hidden");
+  if (freePowerupBtn) freePowerupBtn.classList.remove("visible");
 }
 
 function startGame() {
@@ -1090,6 +1100,7 @@ function startGame() {
   state.multiplayer = false;
   state.onlineMultiplayer = false;
   menu.classList.add("hidden");
+  if (adminFloatingBtn) adminFloatingBtn.classList.remove("hidden");
   reset();
   initAudio();
   hideConnectionStatus();
@@ -1103,6 +1114,7 @@ function startMultiplayer() {
   state.inMenu = false;
   state.multiplayer = true;
   menu.classList.add("hidden");
+  if (adminFloatingBtn) adminFloatingBtn.classList.remove("hidden");
   reset();
   initAudio();
 }
@@ -3974,6 +3986,13 @@ freePowerupBtn?.addEventListener("touchstart", (e) => {
   startWatchingAd();
 });
 adSkip?.addEventListener("click", () => skipAd());
+
+// Floating admin button
+adminFloatingBtn?.addEventListener("click", () => toggleAdmin(true));
+adminFloatingBtn?.addEventListener("touchstart", (e) => {
+  e.preventDefault();
+  toggleAdmin(true);
+});
 
 // ============================================================================
 // INIT
