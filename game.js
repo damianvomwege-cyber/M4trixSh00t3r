@@ -316,6 +316,11 @@ const state = {
   enemySpeedMultiplier: 1,
   enemyHpMultiplier: 1,
   aiDamageMultiplier: 1,
+  timeScale: 1,
+  freezeEnemies: false,
+  forceEnemyType: "random",
+  overdrive: false,
+  overdriveBackup: null,
 };
 
 const player = {
@@ -779,6 +784,9 @@ function captureSaveSnapshot() {
       enemyHpMultiplier: state.enemyHpMultiplier,
       spawningEnabled: state.spawningEnabled,
       aiDamageMultiplier: state.aiDamageMultiplier,
+      timeScale: state.timeScale,
+      freezeEnemies: state.freezeEnemies,
+      forceEnemyType: state.forceEnemyType,
       godMode: state.godMode,
       infiniteAmmo: state.infiniteAmmo,
       p2GodMode: state.p2GodMode,
@@ -852,6 +860,9 @@ function applySaveSnapshot(snapshot) {
   if (savedState.enemyHpMultiplier !== undefined) state.enemyHpMultiplier = savedState.enemyHpMultiplier;
   if (savedState.spawningEnabled !== undefined) state.spawningEnabled = savedState.spawningEnabled;
   if (savedState.aiDamageMultiplier !== undefined) state.aiDamageMultiplier = savedState.aiDamageMultiplier;
+  if (savedState.timeScale !== undefined) state.timeScale = savedState.timeScale;
+  if (savedState.freezeEnemies !== undefined) state.freezeEnemies = savedState.freezeEnemies;
+  if (savedState.forceEnemyType !== undefined) state.forceEnemyType = savedState.forceEnemyType;
   if (savedState.godMode !== undefined) state.godMode = savedState.godMode;
   if (savedState.infiniteAmmo !== undefined) state.infiniteAmmo = savedState.infiniteAmmo;
   if (savedState.p2GodMode !== undefined) state.p2GodMode = savedState.p2GodMode;
@@ -1589,16 +1600,21 @@ function continueFromLevelComplete() {
 function spawnEnemy() {
   const size = 20 + Math.random() * 16;
   const types = ["normal", "normal", "zigzag", "shooter", "shielded"];
-  const type = state.level < 3 ? "normal" : types[Math.floor(Math.random() * types.length)];
+  let type = state.level < 3 ? "normal" : types[Math.floor(Math.random() * types.length)];
+  if (state.forceEnemyType && state.forceEnemyType !== "random") {
+    type = state.forceEnemyType;
+  }
+  const baseSpeed = 60 + Math.random() * 80 + state.level * 8;
+  const baseHp = 1 + Math.floor(state.level / 3);
   
   enemies.push({
     x: Math.random() * (state.width - size),
     y: -size - Math.random() * 120,
     w: size,
     h: size,
-    speed: 60 + Math.random() * 80 + state.level * 8,
-    hp: 1 + Math.floor(state.level / 3),
-    maxHp: 1 + Math.floor(state.level / 3),
+    speed: baseSpeed * (state.enemySpeedMultiplier || 1),
+    hp: baseHp * (state.enemyHpMultiplier || 1),
+    maxHp: baseHp * (state.enemyHpMultiplier || 1),
     type,
     shield: type === "shielded" ? 2 : 0,
     shootTimer: type === "shooter" ? Math.random() * 2 : 0,
@@ -1613,15 +1629,18 @@ function spawnBoss() {
   
   // Much stronger bosses!
   const bossNum = Math.floor(state.level / 5);
-  const bossHp = 80 + state.level * 15 + bossNum * 50;
+  const baseBossHp = 80 + state.level * 15 + bossNum * 50;
+  const bossHp = baseBossHp * (state.enemyHpMultiplier || 1);
   const bossSize = 80 + bossNum * 15;
+  const baseBossSpeed = 40 + bossNum * 10;
   
   const boss = {
     x: state.width / 2 - bossSize / 2,
     y: -150,
     w: bossSize,
     h: bossSize,
-    speed: 40 + bossNum * 10,
+    speed: baseBossSpeed * (state.enemySpeedMultiplier || 1),
+    baseSpeed: baseBossSpeed * (state.enemySpeedMultiplier || 1),
     hp: bossHp,
     maxHp: bossHp,
     type: "boss",
@@ -2532,6 +2551,7 @@ function updateAllyBullets(delta) {
 }
 
 function updateEnemyBullets(delta) {
+  if (state.freezeEnemies) return;
   for (let i = enemyBullets.length - 1; i >= 0; i--) {
     const b = enemyBullets[i];
     b.x += Math.cos(b.angle) * b.speed * delta;
@@ -2543,6 +2563,7 @@ function updateEnemyBullets(delta) {
 }
 
 function updateEnemies(delta) {
+  if (state.freezeEnemies) return;
   for (let i = enemies.length - 1; i >= 0; i--) {
     const enemy = enemies[i];
     
@@ -3869,6 +3890,9 @@ function tick(timestamp) {
   if (slowMoActive) {
     delta *= state.slowMoFactor;
   }
+  if (state.timeScale && state.timeScale !== 1) {
+    delta *= state.timeScale;
+  }
 
   if (!state.inMenu && !state.inShop && !state.inStory && state.running && !state.paused) {
     updateRain(delta);
@@ -4320,6 +4344,7 @@ function populateAdmin() {
   setVal("admin-level", state.level);
   setVal("admin-playerspeed", player.speed);
   setVal("admin-damage", state.damageMultiplier);
+  setVal("admin-timescale", state.timeScale || 1);
   setChk("admin-invincible", state.godMode || false);
   setChk("admin-infiniteammo", state.infiniteAmmo || false);
   
@@ -4337,6 +4362,10 @@ function populateAdmin() {
   setVal("admin-enemyspeed", state.enemySpeedMultiplier || 1);
   setVal("admin-enemyhp", state.enemyHpMultiplier || 1);
   setChk("admin-spawning", state.spawningEnabled !== false);
+  setVal("admin-enemytype", state.forceEnemyType || "random");
+  setChk("admin-freeze", state.freezeEnemies || false);
+  setVal("admin-wavecount", 10);
+  setVal("admin-bossphase", state.currentBoss ? state.currentBoss.phase : 1);
   
   // AI
   setChk("admin-ai", state.aiEnabled);
@@ -4367,8 +4396,10 @@ function applyAdminSettings() {
   state.level = Math.max(1, Math.floor(toNum("admin-level", 1)));
   player.speed = Math.max(50, toNum("admin-playerspeed", 280));
   state.damageMultiplier = Math.max(0.1, toNum("admin-damage", 1));
+  state.timeScale = Math.max(0.2, Math.min(3, toNum("admin-timescale", 1)));
   state.godMode = toChk("admin-invincible");
   state.infiniteAmmo = toChk("admin-infiniteammo");
+  state.p1Invincible = state.godMode ? 9999 : 0;
   
   // Weapons & Powerups
   state.currentWeapon = Math.min(9, Math.max(1, Math.floor(toNum("admin-weapon", 1))));
@@ -4384,6 +4415,8 @@ function applyAdminSettings() {
   state.enemySpeedMultiplier = Math.max(0.1, toNum("admin-enemyspeed", 1));
   state.enemyHpMultiplier = Math.max(0.1, toNum("admin-enemyhp", 1));
   state.spawningEnabled = toChk("admin-spawning");
+  state.forceEnemyType = document.getElementById("admin-enemytype")?.value || "random";
+  state.freezeEnemies = toChk("admin-freeze");
   
   // AI
   state.aiEnabled = toChk("admin-ai");
@@ -4406,6 +4439,12 @@ function applyAdminSettings() {
   player2.lives = Math.max(0, Math.floor(toNum("admin-p2lives", 3)));
   player2.active = toChk("admin-p2active");
   state.p2GodMode = toChk("admin-p2invincible");
+
+  // Boss phase
+  const bossPhase = Math.max(1, Math.min(3, Math.floor(toNum("admin-bossphase", 1))));
+  if (state.currentBoss && state.bossActive) {
+    setBossPhase(state.currentBoss, bossPhase);
+  }
   
   // Audio
   audioState.sfxVolume = Math.max(0, Math.min(1, toNum("admin-sfx", 1)));
@@ -4497,7 +4536,141 @@ function adminNextLevel() {
   nextLevel();
   addDamageNumber(state.width / 2, state.height / 2, `⬆️ LEVEL ${state.level}!`, false);
 }
+function setBossPhase(boss, phase) {
+  if (!boss) return;
+  const safePhase = Math.max(1, Math.min(3, Math.floor(phase)));
+  boss.phase = safePhase;
+  boss.enraged = safePhase === 3;
+  const baseSpeed = boss.baseSpeed || boss.speed || 60;
+  if (safePhase === 1) boss.speed = baseSpeed;
+  if (safePhase === 2) boss.speed = Math.max(baseSpeed, 80);
+  if (safePhase === 3) boss.speed = Math.max(baseSpeed, 120);
+  boss.patternTimer = 0;
+  boss.shootTimer = 0;
+  boss.chargeTimer = 0;
+  boss.summonTimer = 0;
+}
 
+function adminToggleOverdrive() {
+  if (!state.overdrive) {
+    state.overdriveBackup = {
+      damageMultiplier: state.damageMultiplier,
+      fireRateMultiplier: state.fireRateMultiplier,
+      rapid: state.rapid,
+      rapidLevel: state.rapidLevel,
+      shield: state.shield,
+      speed: state.speed,
+      spread: state.spread,
+      godMode: state.godMode,
+      infiniteAmmo: state.infiniteAmmo,
+      lives: state.lives,
+      playerSpeed: player.speed,
+      timeScale: state.timeScale,
+    };
+    state.overdrive = true;
+    state.damageMultiplier = 5;
+    state.fireRateMultiplier = 0.35;
+    state.rapid = 120;
+    state.rapidLevel = 20;
+    state.shield = 120;
+    state.speed = 120;
+    state.spread = 120;
+    state.godMode = true;
+    state.infiniteAmmo = true;
+    state.lives = Math.max(state.lives, 99);
+    player.speed = Math.max(player.speed, 600);
+    state.p1Invincible = 9999;
+    state.timeScale = Math.max(state.timeScale, 1);
+    addDamageNumber(state.width / 2, state.height / 2, "OVERDRIVE ON", true);
+  } else {
+    const backup = state.overdriveBackup || {};
+    state.damageMultiplier = backup.damageMultiplier ?? state.damageMultiplier;
+    state.fireRateMultiplier = backup.fireRateMultiplier ?? state.fireRateMultiplier;
+    state.rapid = backup.rapid ?? state.rapid;
+    state.rapidLevel = backup.rapidLevel ?? state.rapidLevel;
+    state.shield = backup.shield ?? state.shield;
+    state.speed = backup.speed ?? state.speed;
+    state.spread = backup.spread ?? state.spread;
+    state.godMode = backup.godMode ?? state.godMode;
+    state.infiniteAmmo = backup.infiniteAmmo ?? state.infiniteAmmo;
+    state.lives = backup.lives ?? state.lives;
+    player.speed = backup.playerSpeed ?? player.speed;
+    state.timeScale = backup.timeScale ?? state.timeScale;
+    state.p1Invincible = state.godMode ? 9999 : 0;
+    state.overdrive = false;
+    addDamageNumber(state.width / 2, state.height / 2, "OVERDRIVE OFF", false);
+  }
+  updateHud();
+}
+
+function adminClearBullets() {
+  bullets.length = 0;
+  p2Bullets.length = 0;
+  allyBullets.length = 0;
+  enemyBullets.length = 0;
+  lasers.length = 0;
+  rockets.length = 0;
+  homingMissiles.length = 0;
+  addDamageNumber(state.width / 2, state.height / 2, "BULLETS CLEARED", false);
+}
+
+function adminToggleFreezeEnemies() {
+  state.freezeEnemies = !state.freezeEnemies;
+  const chk = document.getElementById("admin-freeze");
+  if (chk) chk.checked = state.freezeEnemies;
+  addDamageNumber(state.width / 2, state.height / 2, state.freezeEnemies ? "ENEMIES FROZEN" : "ENEMIES UNFROZEN", false);
+}
+
+function adminKillBoss() {
+  const idx = enemies.findIndex(e => e.type === "boss");
+  if (idx < 0) {
+    addDamageNumber(state.width / 2, state.height / 2, "NO BOSS", false);
+    return;
+  }
+  const boss = enemies[idx];
+  enemies.splice(idx, 1);
+  state.bossActive = false;
+  state.currentBoss = null;
+  addMegaExplosion(boss.x + boss.w / 2, boss.y + boss.h / 2);
+  addDamageNumber(state.width / 2, state.height / 3, "BOSS DESTROYED!", true);
+  checkAchievement("boss_kill", true);
+  nextLevel();
+  updateHud();
+}
+
+function adminTeleport(entity) {
+  if (!entity) return;
+  const targetX = mouse.x || state.width / 2;
+  const targetY = mouse.y || state.height / 2;
+  entity.x = Math.max(0, Math.min(state.width - entity.w, targetX - entity.w / 2));
+  entity.y = Math.max(60, Math.min(state.height - entity.h - 20, targetY - entity.h / 2));
+  addExplosion(entity.x + entity.w / 2, entity.y + entity.h / 2, "#00e5ff", 12);
+}
+
+function adminSpawnWave() {
+  const count = Math.max(1, Math.min(50, parseInt(document.getElementById("admin-wavecount")?.value, 10) || 10));
+  for (let i = 0; i < count; i++) spawnEnemy();
+  addDamageNumber(state.width / 2, state.height / 2, `WAVE x${count}`, false);
+}
+
+function adminSetBossPhase() {
+  const phase = Math.max(1, Math.min(3, parseInt(document.getElementById("admin-bossphase")?.value, 10) || 1));
+  if (!state.currentBoss || !state.bossActive) {
+    addDamageNumber(state.width / 2, state.height / 2, "NO BOSS", false);
+    return;
+  }
+  setBossPhase(state.currentBoss, phase);
+  addDamageNumber(state.width / 2, state.height / 2, `BOSS PHASE ${phase}`, true);
+}
+
+function adminSlowMoBlast() {
+  triggerSlowMo(1.2, 0.35);
+  addDamageNumber(state.width / 2, state.height / 2, "SLOWMO", false);
+}
+
+function adminFlash() {
+  triggerFlash("#ffffff", 0.15);
+}
 function resetAllProgress() {
   if (!confirm("Willst du wirklich ALLES zurücksetzen?\n\n- Highscores\n- Achievements\n- Gekaufte Upgrades\n- Aktuelles Spiel")) {
     return;
@@ -6029,6 +6202,16 @@ document.getElementById("admin-max-powerups")?.addEventListener("click", adminMa
 document.getElementById("admin-unlock-all")?.addEventListener("click", adminUnlockAll);
 document.getElementById("admin-add-credits")?.addEventListener("click", adminAddCredits);
 document.getElementById("admin-next-level")?.addEventListener("click", adminNextLevel);
+document.getElementById("admin-overdrive")?.addEventListener("click", adminToggleOverdrive);
+document.getElementById("admin-clear-bullets")?.addEventListener("click", adminClearBullets);
+document.getElementById("admin-freeze-enemies")?.addEventListener("click", adminToggleFreezeEnemies);
+document.getElementById("admin-kill-boss")?.addEventListener("click", adminKillBoss);
+document.getElementById("admin-teleport-p1")?.addEventListener("click", () => adminTeleport(player));
+document.getElementById("admin-teleport-p2")?.addEventListener("click", () => adminTeleport(player2));
+document.getElementById("admin-slowmo")?.addEventListener("click", adminSlowMoBlast);
+document.getElementById("admin-flash")?.addEventListener("click", adminFlash);
+document.getElementById("admin-spawn-wave")?.addEventListener("click", adminSpawnWave);
+document.getElementById("admin-set-bossphase")?.addEventListener("click", adminSetBossPhase);
 
 // Admin Quick Powerup Buttons
 document.getElementById("admin-give-rapid")?.addEventListener("click", () => {
@@ -6136,4 +6319,5 @@ resize();
 updateHud();
 requestAnimationFrame(tick);
  
+
 

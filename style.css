@@ -357,6 +357,15 @@ canvas#game.playing {
   font-size: 12px;
 }
 
+.admin-grid select {
+  margin-top: 3px;
+  padding: 5px 8px;
+  background: rgba(0, 255, 154, 0.08);
+  border: 1px solid rgba(0, 255, 154, 0.3);
+  color: var(--matrix-green);
+  font-size: 12px;
+}
+
 .admin-grid input[type="checkbox"] {
   width: 20px;
   height: 20px;

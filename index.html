@@ -219,6 +219,20 @@
           </div>
         </div>
 
+        <!-- Power Tools -->
+        <div class="admin-section">
+          <div class="admin-section-title">POWER TOOLS</div>
+          <div class="admin-buttons">
+            <button id="admin-overdrive" class="btn admin-btn-special">OVERDRIVE</button>
+            <button id="admin-clear-bullets" class="btn admin-btn-special">CLEAR BULLETS</button>
+            <button id="admin-freeze-enemies" class="btn admin-btn-special">FREEZE ENEMIES</button>
+            <button id="admin-kill-boss" class="btn admin-btn-special">KILL BOSS</button>
+            <button id="admin-teleport-p1" class="btn admin-btn-special">TELEPORT P1</button>
+            <button id="admin-teleport-p2" class="btn admin-btn-special">TELEPORT P2</button>
+            <button id="admin-slowmo" class="btn admin-btn-special">SLOWMO BLAST</button>
+            <button id="admin-flash" class="btn admin-btn-special">FLASH</button>
+          </div>
+        </div>
         <!-- Player Stats -->
         <div class="admin-section">
           <div class="admin-section-title">👤 PLAYER</div>
@@ -229,6 +243,7 @@
             <label>Level <input id="admin-level" type="number" min="1" value="1" /></label>
             <label>Speed <input id="admin-playerspeed" type="number" min="50" max="1000" value="280" /></label>
             <label>Damage Multi <input id="admin-damage" type="number" step="0.1" min="0.1" max="10" value="1" /></label>
+            <label>Time Scale <input id="admin-timescale" type="number" step="0.1" min="0.2" max="3" value="1" /></label>
             <label>Invincible <input id="admin-invincible" type="checkbox" /></label>
             <label>Infinite Ammo <input id="admin-infiniteammo" type="checkbox" /></label>
           </div>
@@ -256,7 +271,6 @@
             <button id="admin-give-all" class="btn btn-powerup all">🌟 ALL MAX</button>
           </div>
         </div>
-
         <!-- Enemy Settings -->
         <div class="admin-section">
           <div class="admin-section-title">👾 ENEMIES</div>
@@ -265,6 +279,22 @@
             <label>Enemy Speed Multi <input id="admin-enemyspeed" type="number" step="0.1" min="0.1" max="5" value="1" /></label>
             <label>Enemy HP Multi <input id="admin-enemyhp" type="number" step="0.1" min="0.1" max="5" value="1" /></label>
             <label>Spawn Enemies <input id="admin-spawning" type="checkbox" checked /></label>
+            <label>Force Type
+              <select id="admin-enemytype">
+                <option value="random">Random</option>
+                <option value="normal">Normal</option>
+                <option value="zigzag">Zigzag</option>
+                <option value="shooter">Shooter</option>
+                <option value="shielded">Shielded</option>
+              </select>
+            </label>
+            <label>Freeze Enemies <input id="admin-freeze" type="checkbox" /></label>
+            <label>Wave Count <input id="admin-wavecount" type="number" min="1" max="50" value="10" /></label>
+            <label>Boss Phase <input id="admin-bossphase" type="number" min="1" max="3" value="1" /></label>
+          </div>
+          <div class="admin-buttons">
+            <button id="admin-spawn-wave" class="btn admin-btn-special">SPAWN WAVE</button>
+            <button id="admin-set-bossphase" class="btn admin-btn-special">SET BOSS PHASE</button>
           </div>
         </div>
 
@@ -388,6 +418,13 @@
     <script src="game.js"></script>
   </body>
 </html>
+
+
+
+
+
+
+
 
 
 
