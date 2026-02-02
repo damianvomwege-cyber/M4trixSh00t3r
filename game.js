@@ -46,6 +46,8 @@ const p2StatsEl = document.getElementById("p2-stats");
 const p2LivesEl = document.getElementById("p2-lives");
 const achievementsBtn = document.getElementById("achievements-btn");
 const highscoreBtn = document.getElementById("highscore-btn");
+const savesBtn = document.getElementById("saves-btn");
+const savesOverlayBtn = document.getElementById("saves-overlay-btn");
 const adminBtn = document.getElementById("admin-btn");
 const adminPanel = document.getElementById("admin");
 const adminApply = document.getElementById("admin-apply");
@@ -67,6 +69,9 @@ const achievementsClose = document.getElementById("achievements-close");
 const highscoresPanel = document.getElementById("highscores");
 const highscoreList = document.getElementById("highscore-list");
 const highscoreClose = document.getElementById("highscore-close");
+const savesPanel = document.getElementById("saves");
+const savesGrid = document.getElementById("saves-grid");
+const savesClose = document.getElementById("saves-close");
 const levelComplete = document.getElementById("level-complete");
 const levelStats = document.getElementById("level-stats");
 const levelShop = document.getElementById("level-shop");
@@ -617,6 +622,291 @@ window.buyItem = function(itemId) {
   }
   renderShop();
   updateHud();
+};
+
+// ============================================================================
+// SAVE / LOAD
+// ============================================================================
+const SAVE_SLOT_COUNT = 4;
+const SAVE_STORAGE_KEY = "m4trix_save_slots";
+let savesReturnToOverlay = false;
+
+function getSaveSlots() {
+  let slots = [];
+  try {
+    slots = JSON.parse(localStorage.getItem(SAVE_STORAGE_KEY) || "[]");
+  } catch (err) {
+    slots = [];
+  }
+  const filled = [];
+  for (let i = 0; i < SAVE_SLOT_COUNT; i++) {
+    const slot = slots[i] || {};
+    filled.push({
+      name: slot.name || `Slot ${i + 1}`,
+      timestamp: slot.timestamp || 0,
+      data: slot.data || null,
+    });
+  }
+  return filled;
+}
+
+function setSaveSlots(slots) {
+  localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(slots));
+}
+
+function formatSaveMeta(slot) {
+  if (!slot || !slot.data || !slot.data.state) return "Empty";
+  const s = slot.data.state;
+  const level = s.level ?? 1;
+  const score = s.score ?? 0;
+  const credits = s.credits ?? 0;
+  const dateText = slot.timestamp ? new Date(slot.timestamp).toLocaleString() : "";
+  return `Level ${level} | Score ${score} | Credits ${credits}${dateText ? " | " + dateText : ""}`;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderSaves() {
+  if (!savesGrid) return;
+  const slots = getSaveSlots();
+  savesGrid.innerHTML = slots.map((slot, i) => {
+    const hasData = !!slot.data;
+    const meta = formatSaveMeta(slot);
+    const safeName = escapeHtml(slot.name || `Slot ${i + 1}`);
+    const disabledAttr = hasData ? "" : "disabled";
+    const emptyClass = hasData ? "" : "empty";
+    return `
+      <div class="save-slot ${emptyClass}">
+        <div class="save-slot-header">
+          <input id="save-name-${i}" class="save-name" maxlength="24" value="${safeName}" />
+          <div class="save-meta">${meta}</div>
+        </div>
+        <div class="save-actions">
+          <button class="btn btn-small" onclick="saveSlot(${i})">SAVE</button>
+          <button class="btn btn-small" onclick="loadSlot(${i})" ${disabledAttr}>LOAD</button>
+          <button class="btn btn-small" onclick="renameSlot(${i})" ${disabledAttr}>RENAME</button>
+          <button class="btn btn-small btn-danger" onclick="deleteSlot(${i})" ${disabledAttr}>DELETE</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function captureSaveSnapshot() {
+  return {
+    config: {
+      level: state.level,
+      lives: state.lives,
+      score: state.score,
+      credits: state.credits,
+      spawnInterval: state.spawnInterval,
+      aiUnlockLevel: state.aiUnlockLevel,
+      aiEnabled: state.aiEnabled,
+      aiLives: config.aiLives,
+      aiCount: config.aiCount,
+      rapidLevel: state.rapidLevel,
+      rapidTime: state.rapid,
+      shieldTime: state.shield,
+      speedTime: state.speed,
+      spreadTime: state.spread,
+    },
+    state: {
+      level: state.level,
+      score: state.score,
+      credits: state.credits,
+      lives: state.lives,
+      spawnInterval: state.spawnInterval,
+      rapid: state.rapid,
+      rapidLevel: state.rapidLevel,
+      shield: state.shield,
+      speed: state.speed,
+      spread: state.spread,
+      aiEnabled: state.aiEnabled,
+      aiUnlockLevel: state.aiUnlockLevel,
+      currentWeapon: state.currentWeapon,
+      combo: state.combo,
+      maxCombo: state.maxCombo,
+      damageMultiplier: state.damageMultiplier,
+      fireRateMultiplier: state.fireRateMultiplier,
+      enemySpeedMultiplier: state.enemySpeedMultiplier,
+      enemyHpMultiplier: state.enemyHpMultiplier,
+      spawningEnabled: state.spawningEnabled,
+      aiDamageMultiplier: state.aiDamageMultiplier,
+      godMode: state.godMode,
+      infiniteAmmo: state.infiniteAmmo,
+      p2GodMode: state.p2GodMode,
+      multiplayer: state.multiplayer,
+    },
+    player: {
+      x: player.x,
+      y: player.y,
+      speed: player.speed,
+    },
+    player2: {
+      lives: player2.lives,
+      active: player2.active,
+      weapon: p2CurrentWeapon,
+    },
+    weapons: WEAPONS.map(w => ({ id: w.id, unlocked: w.unlocked })),
+    ownedUpgrades: [...ownedUpgrades],
+    achievements: [...unlockedAchievements],
+  };
+}
+
+function applySaveSnapshot(snapshot) {
+  if (!snapshot) return;
+
+  if (Array.isArray(snapshot.ownedUpgrades)) {
+    ownedUpgrades = [...snapshot.ownedUpgrades];
+    localStorage.setItem("m4trix_upgrades", JSON.stringify(ownedUpgrades));
+  }
+
+  if (Array.isArray(snapshot.achievements)) {
+    unlockedAchievements = [...snapshot.achievements];
+    localStorage.setItem("m4trix_achievements", JSON.stringify(unlockedAchievements));
+    ACHIEVEMENTS.forEach(a => { a.unlocked = unlockedAchievements.includes(a.id); });
+  }
+
+  if (Array.isArray(snapshot.weapons)) {
+    WEAPONS.forEach(w => {
+      const saved = snapshot.weapons.find(s => s.id === w.id);
+      if (saved) w.unlocked = !!saved.unlocked;
+    });
+  }
+
+  const cfg = snapshot.config || {};
+  config.level = cfg.level ?? config.level;
+  config.lives = cfg.lives ?? config.lives;
+  config.score = cfg.score ?? config.score;
+  config.credits = cfg.credits ?? config.credits;
+  config.spawnInterval = cfg.spawnInterval ?? config.spawnInterval;
+  config.aiUnlockLevel = cfg.aiUnlockLevel ?? config.aiUnlockLevel;
+  config.aiEnabled = cfg.aiEnabled ?? config.aiEnabled;
+  config.aiLives = cfg.aiLives ?? config.aiLives;
+  config.aiCount = cfg.aiCount ?? config.aiCount;
+  config.rapidLevel = cfg.rapidLevel ?? config.rapidLevel;
+  config.rapidTime = cfg.rapidTime ?? config.rapidTime;
+  config.shieldTime = cfg.shieldTime ?? config.shieldTime;
+  config.speedTime = cfg.speedTime ?? config.speedTime;
+  config.spreadTime = cfg.spreadTime ?? config.spreadTime;
+
+  const savedState = snapshot.state || {};
+  state.multiplayer = !!savedState.multiplayer;
+  state.onlineMultiplayer = false;
+
+  reset();
+
+  if (savedState.currentWeapon !== undefined) state.currentWeapon = savedState.currentWeapon;
+  if (savedState.combo !== undefined) state.combo = savedState.combo;
+  if (savedState.maxCombo !== undefined) state.maxCombo = savedState.maxCombo;
+  if (savedState.damageMultiplier !== undefined) state.damageMultiplier = savedState.damageMultiplier;
+  if (savedState.fireRateMultiplier !== undefined) state.fireRateMultiplier = savedState.fireRateMultiplier;
+  if (savedState.enemySpeedMultiplier !== undefined) state.enemySpeedMultiplier = savedState.enemySpeedMultiplier;
+  if (savedState.enemyHpMultiplier !== undefined) state.enemyHpMultiplier = savedState.enemyHpMultiplier;
+  if (savedState.spawningEnabled !== undefined) state.spawningEnabled = savedState.spawningEnabled;
+  if (savedState.aiDamageMultiplier !== undefined) state.aiDamageMultiplier = savedState.aiDamageMultiplier;
+  if (savedState.godMode !== undefined) state.godMode = savedState.godMode;
+  if (savedState.infiniteAmmo !== undefined) state.infiniteAmmo = savedState.infiniteAmmo;
+  if (savedState.p2GodMode !== undefined) state.p2GodMode = savedState.p2GodMode;
+  if (state.godMode) state.p1Invincible = 9999;
+
+  if (snapshot.player) {
+    if (snapshot.player.x !== undefined) player.x = snapshot.player.x;
+    if (snapshot.player.y !== undefined) player.y = snapshot.player.y;
+    if (snapshot.player.speed !== undefined) player.speed = snapshot.player.speed;
+  }
+
+  if (snapshot.player2) {
+    p2CurrentWeapon = snapshot.player2.weapon ?? p2CurrentWeapon;
+    if (state.multiplayer) {
+      if (snapshot.player2.lives !== undefined) player2.lives = snapshot.player2.lives;
+      if (snapshot.player2.active !== undefined) player2.active = snapshot.player2.active;
+    }
+  }
+
+  updateHud();
+}
+
+function openSaves() {
+  if (state.onlineMultiplayer) {
+    showConnectionStatus("Save/Load disabled in online games", "disconnected");
+    return;
+  }
+  savesReturnToOverlay = !overlay.classList.contains("hidden");
+  if (savesReturnToOverlay) {
+    overlay.classList.add("hidden");
+  }
+  if (!state.inMenu) {
+    state.paused = true;
+  }
+  renderSaves();
+  savesPanel?.classList.remove("hidden");
+}
+
+function closeSaves() {
+  savesPanel?.classList.add("hidden");
+  if (savesReturnToOverlay) {
+    overlay.classList.remove("hidden");
+  }
+  savesReturnToOverlay = false;
+}
+
+window.saveSlot = function(index) {
+  if (state.onlineMultiplayer) return;
+  const slots = getSaveSlots();
+  const input = document.getElementById(`save-name-${index}`);
+  const name = input?.value?.trim() || `Slot ${index + 1}`;
+  slots[index] = {
+    name,
+    timestamp: Date.now(),
+    data: captureSaveSnapshot(),
+  };
+  setSaveSlots(slots);
+  renderSaves();
+};
+
+window.loadSlot = function(index) {
+  if (state.onlineMultiplayer) return;
+  const slots = getSaveSlots();
+  const slot = slots[index];
+  if (!slot || !slot.data) return;
+  applySaveSnapshot(slot.data);
+  state.inMenu = false;
+  state.inShop = false;
+  state.inStory = false;
+  state.paused = false;
+  state.running = true;
+  menu.classList.add("hidden");
+  overlay.classList.add("hidden");
+  savesPanel?.classList.add("hidden");
+  if (adminFloatingBtn) adminFloatingBtn.classList.remove("hidden");
+  canvas.classList.add("playing");
+  initAudio();
+};
+
+window.renameSlot = function(index) {
+  const slots = getSaveSlots();
+  const slot = slots[index];
+  if (!slot || !slot.data) return;
+  const input = document.getElementById(`save-name-${index}`);
+  const name = input?.value?.trim();
+  if (!name) return;
+  slot.name = name;
+  setSaveSlots(slots);
+  renderSaves();
+};
+
+window.deleteSlot = function(index) {
+  const slots = getSaveSlots();
+  slots[index] = { name: `Slot ${index + 1}`, timestamp: 0, data: null };
+  setSaveSlots(slots);
+  renderSaves();
 };
 
 // ============================================================================
@@ -5684,6 +5974,7 @@ lobbyCodeInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") join
 storyBtn?.addEventListener("click", () => { startStory(1); });
 achievementsBtn?.addEventListener("click", () => { renderAchievements(); achievementsPanel.classList.remove("hidden"); });
 highscoreBtn?.addEventListener("click", () => { renderHighscores(); highscoresPanel.classList.remove("hidden"); });
+savesBtn?.addEventListener("click", () => openSaves());
 adminBtn?.addEventListener("click", () => toggleAdmin(true));
 adminApply?.addEventListener("click", () => applyAdminSettings());
 adminClose?.addEventListener("click", () => toggleAdmin(false));
@@ -5752,6 +6043,7 @@ document.getElementById("admin-give-all")?.addEventListener("click", () => {
 shopClose?.addEventListener("click", () => closeShop());
 achievementsClose?.addEventListener("click", () => achievementsPanel.classList.add("hidden"));
 highscoreClose?.addEventListener("click", () => highscoresPanel.classList.add("hidden"));
+savesClose?.addEventListener("click", () => closeSaves());
 storyNext?.addEventListener("click", () => nextStoryScene());
 storySkip?.addEventListener("click", () => endStory());
 levelShop?.addEventListener("click", () => { levelComplete.classList.add("hidden"); openShop(); });
@@ -5772,6 +6064,10 @@ restartBtn?.addEventListener("click", () => {
 shopOverlayBtn?.addEventListener("click", () => {
   overlay.classList.add("hidden");
   openShop();
+});
+
+savesOverlayBtn?.addEventListener("click", () => {
+  openSaves();
 });
 
 adminOverlayBtn?.addEventListener("click", () => {

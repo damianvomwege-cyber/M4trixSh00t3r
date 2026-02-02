@@ -69,6 +69,7 @@
           <button id="chat-btn" class="btn">🤖 MATRIX AI CHAT</button>
           <button id="achievements-btn" class="btn">🏆 ACHIEVEMENTS</button>
           <button id="highscore-btn" class="btn">📊 HIGHSCORES</button>
+          <button id="saves-btn" class="btn">SAVE / LOAD</button>
           <button id="admin-btn" class="btn">⚙ ADMIN PANEL</button>
         </div>
       </div>
@@ -170,6 +171,19 @@
         <div id="highscore-list" class="highscore-list"></div>
         <div class="admin-actions">
           <button id="highscore-close" class="btn">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- Save / Load -->
+    <div id="saves" class="overlay hidden">
+      <div class="panel saves-panel">
+        <div class="panel-title">SAVE SLOTS</div>
+        <div class="panel-text">Save your current run, load it after rejoining, or rename/delete slots.</div>
+        <div id="saves-grid" class="saves-grid"></div>
+        <div class="admin-actions">
+          <button id="saves-close" class="btn">CLOSE</button>
         </div>
       </div>
     </div>
@@ -307,6 +321,7 @@
           <button id="resume-btn" class="btn btn-large hidden">▶ RESUME</button>
           <button id="restart-btn" class="btn btn-large hidden">🔄 RESTART</button>
           <button id="shop-overlay-btn" class="btn">🛒 SHOP</button>
+          <button id="saves-overlay-btn" class="btn">SAVE / LOAD</button>
           <button id="admin-overlay-btn" class="btn">⚙ ADMIN</button>
           <button id="menu-btn" class="btn">◀ MAIN MENU</button>
         </div>
@@ -373,3 +388,8 @@
     <script src="game.js"></script>
   </body>
 </html>
+
+
+
+
+
