@@ -1436,6 +1436,52 @@ function gameOver() {
   saveHighscore();
 }
 
+function respawnSinglePlayer() {
+  if (state.multiplayer) return;
+  state.running = true;
+  state.paused = false;
+  state.inShop = false;
+  state.inStory = false;
+  overlay.classList.add("hidden");
+  if (resumeBtn) resumeBtn.classList.add("hidden");
+  if (restartBtn) restartBtn.classList.add("hidden");
+
+  state.lives = Math.max(1, state.lives);
+  state.p1Dead = false;
+  state.p1Invincible = 2;
+  state.combo = 0;
+  state.comboTimer = 0;
+
+  // Clear active threats/projectiles for a clean respawn
+  bullets.length = 0;
+  allyBullets.length = 0;
+  p2Bullets.length = 0;
+  enemyBullets.length = 0;
+  lasers.length = 0;
+  rockets.length = 0;
+  homingMissiles.length = 0;
+  particles.length = 0;
+  damageNumbers.length = 0;
+  trails.length = 0;
+  lightnings.length = 0;
+
+  // Reset boss if we died during it
+  if (state.bossActive) {
+    state.bossActive = false;
+    state.currentBoss = null;
+    if (state.level % 5 === 0) state.bossLevel = 0;
+  }
+  enemies.length = 0;
+
+  player.x = state.width / 2 - player.w / 2;
+  player.y = state.height - player.h - 60;
+
+  addDamageNumber(player.x + player.w / 2, player.y, "RESPAWNED!", false);
+  addExplosion(player.x + player.w / 2, player.y + player.h / 2, "#00ff9a", 15);
+  startBgm();
+  updateHud();
+}
+
 function openMenu() {
   state.inMenu = true;
   state.running = false;
@@ -4066,7 +4112,11 @@ window.addEventListener("keydown", (event) => {
   }
   
   if (event.code === "KeyR" && !event.repeat) {
-    reset();
+    if (!state.multiplayer && !state.running && state.lives <= 0) {
+      respawnSinglePlayer();
+    } else {
+      reset();
+    }
     return;
   }
   
