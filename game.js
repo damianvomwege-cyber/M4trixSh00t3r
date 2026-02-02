@@ -2973,8 +2973,9 @@ function checkCollisions() {
   // Player vs enemy bullets (skip if P1 is dead, invincible, or godmode)
   if (!state.p1Dead && state.p1Invincible <= 0 && !state.godMode) {
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
-      if (rectsOverlap(player, enemyBullets[i])) {
-        const b = enemyBullets[i];
+      const b = enemyBullets[i];
+      const hitbox = { x: b.x - b.w / 2, y: b.y - b.h / 2, w: b.w, h: b.h };
+      if (rectsOverlap(player, hitbox)) {
         enemyBullets.splice(i, 1);
         addExplosion(b.x, b.y, b.color || "#ff2255", 8);
         if (state.shield > 0) {
@@ -3056,8 +3057,9 @@ function checkCollisions() {
     // Player 2 vs enemy bullets
     if (player2.invincibleTimer <= 0) {
       for (let i = enemyBullets.length - 1; i >= 0; i--) {
-        if (rectsOverlap(player2, enemyBullets[i])) {
-          const b = enemyBullets[i];
+        const b = enemyBullets[i];
+        const hitbox = { x: b.x - b.w / 2, y: b.y - b.h / 2, w: b.w, h: b.h };
+        if (rectsOverlap(player2, hitbox)) {
           enemyBullets.splice(i, 1);
           player2.lives--;
           player2.invincibleTimer = 1.5; // 1.5 seconds of invincibility
