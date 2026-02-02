@@ -211,6 +211,11 @@ const STORY = [
 // SHOP UPGRADES
 // ============================================================================
 const SHOP_ITEMS = [
+  { id: "weapon_5", name: "Shotgun", icon: "WPN", price: 800, type: "weapon", weaponId: 5 },
+  { id: "weapon_6", name: "Minigun", icon: "WPN", price: 1500, type: "weapon", weaponId: 6 },
+  { id: "weapon_7", name: "Plasma", icon: "WPN", price: 2500, type: "weapon", weaponId: 7 },
+  { id: "weapon_8", name: "Chain Lightning", icon: "WPN", price: 3000, type: "weapon", weaponId: 8 },
+  { id: "weapon_9", name: "Freeze", icon: "WPN", price: 3500, type: "weapon", weaponId: 9 },
   { id: "weapon_2", name: "Laser Gun", icon: "🔫", price: 500, type: "weapon", weaponId: 2 },
   { id: "weapon_3", name: "Rockets", icon: "🚀", price: 1000, type: "weapon", weaponId: 3 },
   { id: "weapon_4", name: "Homing Missiles", icon: "🎯", price: 2000, type: "weapon", weaponId: 4 },
@@ -1350,6 +1355,9 @@ function shoot() {
       x: cx - 3,
       y: cy - 6,
       angle: mouseAngle,
+      dirX: dx,
+      dirY: dy,
+      weapon: state.currentWeapon,
     });
   }
   
@@ -1882,6 +1890,8 @@ function player2Shoot() {
       y: cy - 6,
       weapon: p2CurrentWeapon,
       angle: mouseAngle,
+      dirX: dx,
+      dirY: dy,
     });
   }
   
@@ -3629,12 +3639,24 @@ window.addEventListener("keydown", (event) => {
     return;
   }
   
-  // Weapon switching (1-9)
+  // Weapon switching (1-9). In local multiplayer, Shift+1-9 switches P2.
   if (event.key >= "1" && event.key <= "9") {
     const weaponId = parseInt(event.key);
     const weapon = WEAPONS.find(w => w.id === weaponId);
     if (weapon && weapon.unlocked) {
-      state.currentWeapon = weaponId;
+      if (state.onlineMultiplayer) {
+        if (netState.isHost) {
+          state.currentWeapon = weaponId;
+        } else {
+          p2CurrentWeapon = weaponId;
+          addDamageNumber(player2.x + player2.w / 2, player2.y - 20, `P2: ${weapon.name}`, false);
+        }
+      } else if (state.multiplayer && event.shiftKey) {
+        p2CurrentWeapon = weaponId;
+        addDamageNumber(player2.x + player2.w / 2, player2.y - 20, `P2: ${weapon.name}`, false);
+      } else {
+        state.currentWeapon = weaponId;
+      }
       updateHud();
     }
     return;
@@ -4189,6 +4211,117 @@ function resetAllProgress() {
 // ============================================================================
 // ONLINE LOBBY FUNCTIONS (Socket.io)
 // ============================================================================
+function spawnRemoteShot(data) {
+  const weaponId = Number(data.weapon) || 1;
+  const weapon = WEAPONS.find(w => w.id === weaponId) || WEAPONS[0];
+  const hasAngle = Number.isFinite(data.angle);
+  const hasDir = Number.isFinite(data.dirX) && Number.isFinite(data.dirY);
+  const angle = hasAngle ? data.angle : (hasDir ? Math.atan2(data.dirY, data.dirX) : -Math.PI / 2);
+  const cx = (data.x || 0) + 3;
+  const cy = (data.y || 0) + 6;
+  const isHostShooter = !!data.isHost;
+  const useP2Bullets = netState.isHost && !isHostShooter;
+  const bulletColor = isHostShooter ? (weapon.color || "#00ff9a") : "#ff6a6a";
+  const blasterH = isHostShooter ? 10 : 12;
+
+  const pushBullet = (b) => {
+    if (useP2Bullets) {
+      p2Bullets.push(b);
+    } else {
+      bullets.push(b);
+    }
+  };
+
+  switch (weaponId) {
+    case 1: // Blaster
+      pushBullet({
+        x: cx - 3, y: cy - 6, w: 6, h: blasterH,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, angle, directional: true, remote: true,
+      });
+      break;
+    case 2: { // Laser
+      const dist = 2000;
+      const endX = cx + Math.cos(angle) * dist;
+      const endY = cy + Math.sin(angle) * dist;
+      lasers.push({
+        x1: cx, y1: cy, x2: endX, y2: endY, w: 4,
+        damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, life: 0.1, pierce: true,
+        angle, directional: true, remote: true,
+      });
+      break;
+    }
+    case 3: // Rockets
+      rockets.push({
+        x: cx - 6, y: cy - 10, w: 12, h: 16,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, explosionRadius: 60,
+        angle, directional: true, remote: true,
+      });
+      break;
+    case 4: // Homing
+      homingMissiles.push({
+        x: cx - 4, y: cy - 8, w: 8, h: 12,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, target: null,
+        angle, directional: true, remote: true,
+      });
+      break;
+    case 5: { // Shotgun
+      const numBullets = weapon.spread || 7;
+      const spreadAngle = 0.5;
+      for (let i = 0; i < numBullets; i++) {
+        const angleOffset = -spreadAngle / 2 + (spreadAngle / (numBullets - 1)) * i;
+        pushBullet({
+          x: cx - 3, y: cy - 6, w: 5, h: 8,
+          speed: weapon.speed + (Math.random() - 0.5) * 100,
+          damage: weapon.damage * state.damageMultiplier,
+          color: bulletColor, angle: angle + angleOffset, directional: true, remote: true,
+        });
+      }
+      break;
+    }
+    case 6: // Minigun
+      pushBullet({
+        x: cx - 2 + (Math.random() - 0.5) * 8, y: cy - 6, w: 4, h: 8,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, angle: angle + (Math.random() - 0.5) * 0.15, directional: true, remote: true,
+      });
+      break;
+    case 7: // Plasma
+      pushBullet({
+        x: cx - 8, y: cy - 10, w: 16, h: 16,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, isPlasma: true, explosionRadius: 40,
+        angle, directional: true, remote: true,
+      });
+      break;
+    case 8: // Chain
+      pushBullet({
+        x: cx - 3, y: cy - 6, w: 6, h: 10,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, isChain: true, chainCount: 3, hitEnemies: [],
+        angle, directional: true, remote: true,
+      });
+      break;
+    case 9: // Freeze
+      pushBullet({
+        x: cx - 4, y: cy - 8, w: 8, h: 12,
+        speed: weapon.speed, damage: weapon.damage * state.damageMultiplier,
+        color: bulletColor, isFreeze: true, slowDuration: 3, slowAmount: 0.4,
+        angle, directional: true, remote: true,
+      });
+      break;
+    default:
+      pushBullet({
+        x: cx - 3, y: cy - 6, w: 6, h: blasterH,
+        speed: weapon.speed || 520, damage: state.damageMultiplier,
+        color: bulletColor, angle, directional: true, remote: true,
+      });
+  }
+}
+
 function connectToServer() {
   return new Promise((resolve, reject) => {
     console.log("Connecting to server:", SERVER_URL);
@@ -4267,21 +4400,7 @@ function connectToServer() {
     });
     
     socket.on("bullet_fired", (data) => {
-      const bullet = {
-        x: data.x,
-        y: data.y,
-        w: 6,
-        h: 12,
-        speed: 520,
-        damage: 1,
-        color: data.isHost ? "#00ff9a" : "#ff6a6a",
-        remote: true,
-      };
-      if (netState.isHost) {
-        p2Bullets.push(bullet);
-      } else {
-        bullets.push(bullet);
-      }
+      spawnRemoteShot(data);
     });
     
     socket.on("game_state", (data) => {
