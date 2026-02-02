@@ -230,6 +230,26 @@ const SHOP_ITEMS = [
   { id: "damage_up", name: "Damage +10%", icon: "💥", price: 800, type: "upgrade", stat: "damage", owned: false },
   { id: "fire_rate", name: "Fire Rate +15%", icon: "🔥", price: 600, type: "upgrade", stat: "firerate", owned: false },
 ];
+const DEFAULT_WEAPON_SHOP_ICON = "WPN";
+
+function ensureWeaponShopItems() {
+  WEAPONS.forEach(w => {
+    if (w.id === 1) return;
+    const exists = SHOP_ITEMS.some(item => item.type === "weapon" && item.weaponId === w.id);
+    if (!exists) {
+      SHOP_ITEMS.unshift({
+        id: `weapon_${w.id}`,
+        name: w.name,
+        icon: DEFAULT_WEAPON_SHOP_ICON,
+        price: w.price || 0,
+        type: "weapon",
+        weaponId: w.id,
+      });
+    }
+  });
+}
+
+ensureWeaponShopItems();
 
 // ============================================================================
 // GAME STATE
@@ -575,9 +595,30 @@ function closeShop() {
   shopPanel.classList.add("hidden");
 }
 
+function getShopItems() {
+  const weaponOverrides = new Map();
+  SHOP_ITEMS.filter(item => item.type === "weapon").forEach(item => {
+    weaponOverrides.set(item.weaponId, item);
+  });
+  const weaponItems = WEAPONS.filter(w => w.id !== 1).map(w => {
+    const override = weaponOverrides.get(w.id);
+    return {
+      id: override?.id || `weapon_${w.id}`,
+      name: override?.name || w.name,
+      icon: override?.icon || DEFAULT_WEAPON_SHOP_ICON,
+      price: override?.price ?? w.price ?? 0,
+      type: "weapon",
+      weaponId: w.id,
+    };
+  });
+  const otherItems = SHOP_ITEMS.filter(item => item.type !== "weapon");
+  return [...weaponItems, ...otherItems];
+}
+
 function renderShop() {
   shopCredits.textContent = `Credits: ${state.credits}`;
-  shopGrid.innerHTML = SHOP_ITEMS.map(item => {
+  const items = getShopItems();
+  shopGrid.innerHTML = items.map(item => {
     const owned = item.type === "weapon" ? WEAPONS.find(w => w.id === item.weaponId)?.unlocked : 
                   item.type === "upgrade" ? ownedUpgrades.includes(item.id) : false;
     const canBuy = state.credits >= item.price && !owned;
@@ -593,7 +634,7 @@ function renderShop() {
 }
 
 window.buyItem = function(itemId) {
-  const item = SHOP_ITEMS.find(i => i.id === itemId);
+  const item = getShopItems().find(i => i.id === itemId);
   if (!item || state.credits < item.price) return;
   
   if (item.type === "weapon") {
@@ -6095,3 +6136,4 @@ resize();
 updateHud();
 requestAnimationFrame(tick);
  
+
